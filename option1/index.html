@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MacroPad Config UI</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #0f172a;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+    margin: 0;
+  }
+
+  h1 { font-size: 20px; margin: 10px 0; }
+
+  .container {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 16px;
+    align-items: end;
+  }
+
+  .left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 60px);
+    gap: 10px;
+  }
+
+  .button {
+    width: 60px;
+    height: 60px;
+    background: #1e293b;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+  }
+
+  .button.active { background: #22c55e; }
+
+  .right {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .hat {
+    display: grid;
+    grid-template-columns: 50px 50px 50px;
+    grid-template-rows: 50px 50px 50px;
+    gap: 5px;
+  }
+
+  .hat .spacer { background: transparent; }
+
+  .hat .dir {
+    width: 50px;
+    height: 50px;
+    background: #334155;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+  }
+
+  .hat .dir.active { background: #22c55e; }
+
+  .thumb {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .joystick {
+    margin-top: 16px;
+    width: 260px;
+    height: 120px;
+    background: #1e293b;
+    border-radius: 20px;
+    position: relative;
+  }
+
+  .joy-dot {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: #22c55e;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    left: 50%;
+    top: 50%;
+  }
+
+  .topbar {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .pill {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #334155;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .pill.connected { background: #16a34a; }
+
+  .profiles {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  select, .btn {
+    background: #1e293b;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .btn.primary { background: #2563eb; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  .overlay.hidden { display: none; }
+
+  .card {
+    background: #020617;
+    padding: 20px;
+    border-radius: 16px;
+    text-align: center;
+    width: 90%;
+    max-width: 320px;
+  }
+
+  .device-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* 🔥 MOBILE OPTIMIZATION */
+  @media (max-width: 600px) {
+    .container {
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .right {
+      justify-content: center;
+    }
+
+    .grid {
+      transform: scale(0.9);
+    }
+
+    .joystick {
+      width: 220px;
+      height: 100px;
+    }
+
+    .hat {
+      transform: scale(0.9);
+    }
+
+    .button {
+      width: 50px;
+      height: 50px;
+      font-size: 12px;
+    }
+  }
+
+</style>
+</head>
+<body>
+
+<!-- Connect Overlay -->
+<div id="overlay" class="overlay">
+  <div class="card">
+    <h2>Connect your MacroPad</h2>
+    <button class="btn primary" id="connectBtn">Connect Device</button>
+    <div class="device-list" id="deviceList"></div>
+    <div class="status" id="overlayStatus">Not connected</div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div id="connPill" class="pill">Disconnected</div>
+  <div class="profiles">
+    <label>Profile:</label>
+    <select id="profileSelect"></select>
+    <button class="btn" id="newProfile">New</button>
+    <button class="btn" id="saveProfile">Save</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="left">
+    <h1>MacroPad Config</h1>
+    <div class="grid" id="grid"></div>
+    <div class="joystick" id="joystick">
+      <div class="joy-dot" id="joyDot"></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="hat" id="hat">
+      <div class="spacer"></div><div class="dir" data-dir="up">↑</div><div class="spacer"></div>
+      <div class="dir" data-dir="left">←</div><div class="dir" data-dir="center">•</div><div class="dir" data-dir="right">→</div>
+      <div class="spacer"></div><div class="dir" data-dir="down">↓</div><div class="spacer"></div>
+    </div>
+
+    <div class="thumb">
+      <div class="button" data-id="t1">T1</div>
+      <div class="button" data-id="t2">T2</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Build 12-key grid ----------
+const grid = document.getElementById('grid');
+for (let i = 1; i <= 12; i++) {
+  const btn = document.createElement('div');
+  btn.className = 'button';
+  btn.dataset.id = i;
+  btn.innerText = i;
+
+  // mouse
+  btn.addEventListener('mousedown', () => btn.classList.add('active'));
+  btn.addEventListener('mouseup', () => btn.classList.remove('active'));
+  btn.addEventListener('mouseleave', () => btn.classList.remove('active'));
+
+  // touch
+  btn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    btn.classList.add('active');
+  });
+  btn.addEventListener('touchend', () => btn.classList.remove('active'));
+
+  grid.appendChild(btn);
+}
+
+// ---------- Thumb buttons ----------
+document.querySelectorAll('.thumb .button').forEach(b => {
+  b.addEventListener('mousedown', () => b.classList.add('active'));
+  b.addEventListener('mouseup', () => b.classList.remove('active'));
+  b.addEventListener('mouseleave', () => b.classList.remove('active'));
+
+  b.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    b.classList.add('active');
+  });
+  b.addEventListener('touchend', () => b.classList.remove('active'));
+});
+
+// ---------- Hat switch ----------
+document.querySelectorAll('.hat .dir').forEach(d => {
+  d.addEventListener('mousedown', () => d.classList.add('active'));
+  d.addEventListener('mouseup', () => d.classList.remove('active'));
+  d.addEventListener('mouseleave', () => d.classList.remove('active'));
+
+  d.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    d.classList.add('active');
+  });
+  d.addEventListener('touchend', () => d.classList.remove('active'));
+});
+
+// ---------- Joystick (mouse + touch) ----------
+const joystick = document.getElementById('joystick');
+const dot = document.getElementById('joyDot');
+let dragging = false;
+
+joystick.addEventListener('mousedown', (e) => { dragging = true; moveDot(e.clientX, e.clientY); });
+window.addEventListener('mouseup', () => { dragging = false; resetDot(); });
+window.addEventListener('mousemove', (e) => { if (dragging) moveDot(e.clientX, e.clientY); });
+
+joystick.addEventListener('touchstart', (e) => {
+  dragging = true;
+  const t = e.touches[0];
+  moveDot(t.clientX, t.clientY);
+});
+
+window.addEventListener('touchend', () => { dragging = false; resetDot(); });
+window.addEventListener('touchmove', (e) => {
+  if (!dragging) return;
+  const t = e.touches[0];
+  moveDot(t.clientX, t.clientY);
+});
+
+function moveDot(clientX, clientY) {
+  const rect = joystick.getBoundingClientRect();
+  let x = clientX - rect.left;
+  let y = clientY - rect.top;
+
+  x = Math.max(0, Math.min(rect.width, x));
+  y = Math.max(0, Math.min(rect.height, y));
+
+  dot.style.left = x + 'px';
+  dot.style.top = y + 'px';
+
+  const nx = ((x / rect.width) * 2 - 1).toFixed(2);
+  const ny = ((y / rect.height) * 2 - 1).toFixed(2);
+  console.log('Joystick:', nx, ny);
+}
+
+function resetDot() {
+  dot.style.left = '50%';
+  dot.style.top = '50%';
+}
+
+</script>
+
+</body>
+</html>

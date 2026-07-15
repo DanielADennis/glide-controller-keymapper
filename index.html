@@ -1,0 +1,1351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>KeyMapper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  :root{
+    --bg:#0a0a0c;--surf:#111114;--raise:#18181c;--brd:#2a2a30;--mut:#777;
+    --amber:#f59e0b;
+    --t-key:#10b981;--t-mouse:#3b82f6;--t-gamepad:#a855f7;--t-media:#f59e0b;--t-system:#ef4444;--t-macro:#06b6d4;
+  }
+  body{background:var(--bg);font-family:'IBM Plex Mono',ui-monospace,monospace;color:#eee;
+       -webkit-tap-highlight-color:transparent;overflow-x:hidden}
+  .app{min-height:100%;display:flex;flex-direction:column}
+
+  /* ── Header ── */
+  .hdr{display:flex;align-items:center;gap:10px;padding:0 12px;height:56px;
+       border-bottom:1px solid var(--brd);background:var(--surf);flex-shrink:0;
+       position:sticky;top:0;z-index:20}
+  .iconbtn{display:flex;align-items:center;justify-content:center;width:40px;height:40px;
+           background:none;border:none;color:#eee;cursor:pointer;border-radius:8px;flex-shrink:0}
+  .iconbtn:active{background:var(--raise)}
+  .iconbtn svg{width:22px;height:22px}
+  .logo{font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);font-size:15px;white-space:nowrap}
+  .sp{flex:1}
+
+  .connwrap{display:flex;align-items:center;gap:8px}
+  .pill{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;
+        background:var(--raise);border:1px solid var(--brd);font-size:11px;letter-spacing:.04em;
+        text-transform:uppercase;white-space:nowrap;color:var(--mut)}
+  .pill .pdot{width:8px;height:8px;border-radius:50%;background:#444;flex-shrink:0}
+  .pill.on{color:var(--t-key);border-color:var(--t-key)}
+  .pill.on .pdot{background:var(--t-key);box-shadow:0 0 8px var(--t-key)}
+
+  .linkbox{display:flex;align-items:center;justify-content:center;width:40px;height:40px;
+           border-radius:10px;border:1px solid var(--amber);background:none;color:var(--amber);
+           cursor:pointer;flex-shrink:0}
+  .linkbox:active{background:var(--amber);color:var(--bg)}
+  .linkbox.on{border-color:var(--t-key);color:var(--t-key)}
+  .linkbox.on:active{background:var(--t-key);color:var(--bg)}
+  .linkbox svg{width:18px;height:18px}
+
+  /* ── Active-profile context bar ── */
+  .ctxbar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--surf);
+          border-bottom:1px solid var(--brd);flex-shrink:0}
+  .ctxbar .cdot{width:8px;height:8px;border-radius:50%;background:var(--t-key);
+                box-shadow:0 0 8px var(--t-key);flex-shrink:0}
+  .ctxbar.editing .cdot{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .ctxtext{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
+  .ctxtext .clabel{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#555}
+  .ctxbar.editing .ctxtext .clabel{color:var(--amber)}
+  .ctxtext .cname{font-size:13px;font-weight:600;color:#eee;overflow:hidden;text-overflow:ellipsis;
+                  white-space:nowrap}
+  .ctxtext .csub{font-size:10px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;
+                 white-space:nowrap;margin-top:1px}
+  .ctxbtn{flex-shrink:0;min-height:34px;padding:0 13px;border-radius:8px;border:1px solid var(--amber);
+          background:none;color:var(--amber);font:inherit;font-size:10px;font-weight:700;
+          letter-spacing:.07em;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+  .ctxbtn:active{background:var(--amber);color:var(--bg)}
+
+  /* ── Backdrop (shared by drawer + sheet) ── */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;
+            transition:opacity .2s ease;z-index:30}
+  .backdrop.show{opacity:1;pointer-events:auto}
+
+  /* ── Side drawer ── */
+  .drawer{position:fixed;top:0;bottom:0;left:0;width:280px;max-width:84vw;background:var(--surf);
+          border-right:1px solid var(--brd);z-index:40;transform:translateX(-100%);
+          transition:transform .22s ease;display:flex;flex-direction:column;overflow-y:auto;
+          padding-bottom:env(safe-area-inset-bottom)}
+  .drawer.open{transform:translateX(0)}
+  .drawer-hd{padding:20px 18px 14px;border-bottom:1px solid var(--brd)}
+  .drawer-hd .t{font-size:20px;font-weight:700;letter-spacing:.1em;color:var(--amber);text-transform:uppercase}
+  .drawer-hd .s{font-size:10px;color:#666;letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+  .dsec{padding:16px 18px;border-bottom:1px solid var(--brd)}
+  .dsec:last-child{border-bottom:none;margin-top:auto}
+  .dlabel{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
+  select{width:100%;background:var(--raise);border:1px solid var(--brd);color:#eee;
+         font:inherit;font-size:13px;padding:11px 12px;outline:none;appearance:none;border-radius:8px;min-height:46px}
+  select:focus{border-color:var(--amber)}
+  .row{display:flex;gap:8px;margin-top:8px}
+  .dbtn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+        min-height:46px;padding:0 12px;font:inherit;font-size:12px;font-weight:600;
+        letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--brd);
+        background:var(--raise);color:#eee;cursor:pointer;border-radius:8px}
+  .dbtn:active{border-color:var(--amber);color:var(--amber)}
+  .dbtn.acc{border-color:var(--amber);color:var(--amber)}
+  .dbtn.acc:active{background:var(--amber);color:var(--bg)}
+  .dbtn.ok{border-color:var(--t-key);color:var(--t-key)}
+  .dbtn.ok:active{background:var(--t-key);color:var(--bg)}
+  .dbtn.full{width:100%}
+  .dhint{font-size:11px;color:#555;line-height:1.6;margin-top:10px}
+
+  /* ── Grouped profile list ── */
+  .pgroup{border:1px solid var(--brd);border-radius:10px;margin-bottom:8px;overflow:hidden;background:var(--bg)}
+  .pghd{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;
+        background:var(--raise);user-select:none}
+  .pghd:active{background:var(--surf)}
+  .pghd .pgchev{width:14px;height:14px;color:#666;flex-shrink:0;transition:transform .18s ease}
+  .pgroup.open .pghd .pgchev{transform:rotate(90deg)}
+  .pghd .pgname{flex:1;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#bbb}
+  .pghd .pgcount{font-size:10px;color:#666;background:var(--bg);border:1px solid var(--brd);
+                 border-radius:999px;padding:2px 8px;flex-shrink:0}
+  .pgrows{display:none}
+  .pgroup.open .pgrows{display:block}
+  .prow{display:flex;align-items:center;gap:9px;padding:11px 14px;cursor:pointer;
+        border-top:1px solid var(--brd)}
+  .prow:active{background:var(--raise)}
+  .prow .pdot{width:7px;height:7px;border-radius:50%;background:#3a3a40;flex-shrink:0}
+  .prow.live .pdot{background:var(--t-key);box-shadow:0 0 6px var(--t-key)}
+  .prow .pname{flex:1;font-size:12.5px;color:#bbb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prow.cur{background:rgba(245,158,11,.08)}
+  .prow.cur .pname{color:var(--amber);font-weight:600}
+  .prow .pbadge{font-size:8.5px;font-weight:700;letter-spacing:.09em;color:var(--t-key);
+                border:1px solid var(--t-key);border-radius:999px;padding:2px 7px;flex-shrink:0;
+                white-space:nowrap}
+  .prowdel{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+           flex-shrink:0;background:none;border:none;border-radius:7px;color:#3a3a40;cursor:pointer;
+           margin:-6px -6px -6px 0}
+  .prowdel:active{background:rgba(239,68,68,.15);color:var(--t-system)}
+  .prowdel svg{width:15px;height:15px}
+  body:not(.online) .prowdel{display:none}
+  body:not(.online) #newProfileBtn{display:none !important}
+  body:not(.online) .cell{cursor:default}
+
+  /* ── New-profile inline form ── */
+  .npform{display:flex;flex-direction:column;gap:8px;padding:12px;margin-top:10px;
+          background:var(--raise);border:1px solid var(--brd);border-radius:10px}
+  .npform input[type=text]{width:100%;background:var(--bg);border:1px solid var(--brd);color:#eee;
+          font:inherit;font-size:13px;padding:11px 12px;outline:none;border-radius:8px;min-height:46px}
+  .npform input[type=text]:focus{border-color:var(--amber)}
+  .npform .fl{margin:2px 0 0}
+
+  /* ── Main layout ── */
+  .main{flex:1;display:flex;flex-direction:column;align-items:center;padding:20px 14px 32px;gap:22px}
+  .layout{display:flex;flex-direction:column;align-items:center;gap:26px;width:100%}
+  .col{display:flex;flex-direction:column;align-items:center;gap:22px}
+
+  .grid{display:grid;grid-template-columns:repeat(4,64px);gap:10px;justify-content:center}
+  .cell{position:relative;width:64px;height:64px;background:var(--raise);border:1.5px solid var(--brd);
+        border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+        user-select:none;cursor:pointer;color:#e6e6e6;gap:2px}
+  .cell .lab{font-size:13px;font-weight:700}
+  .cell .sub{font-size:8px;font-weight:600;letter-spacing:.03em;max-width:90%;overflow:hidden;
+             text-overflow:ellipsis;white-space:nowrap}
+  .cell.sel{border-color:var(--amber);box-shadow:0 0 0 2px rgba(245,158,11,.25)}
+  .cell.bound .lab{color:#fff}
+  .cell:active{transform:scale(.96)}
+  /* Lit while the physical input is held on the device. White rather than a
+     palette colour: every hue in TYPES already means "binding type", and amber
+     already means "selected". Styled with outline + an inset shadow because
+     paintCell writes background/border-color inline, which a class can only beat
+     with !important; the inset shadow also paints under .lab/.sub, so the labels
+     stay crisp. No transition — the point is that it tracks the finger. */
+  .cell.live{outline:2px solid rgba(255,255,255,.9);
+             box-shadow:inset 0 0 0 99px rgba(255,255,255,.18),0 0 14px rgba(255,255,255,.35);
+             transform:scale(.94)}
+
+  .right{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap}
+
+  .hat{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:6px}
+  .hat .spacer{background:transparent}
+  .hat .cell{width:52px;height:52px;border-radius:9px}
+  .hat .cell .lab{font-size:16px}
+  .hat .cell.center{border-radius:50%}
+
+  .thumb{display:flex;flex-direction:column;gap:10px}
+  .thumb .cell{width:64px;height:64px}
+
+  .joystick{position:relative;width:280px;max-width:88vw;height:150px;background:var(--raise);
+            border:1.5px solid var(--brd);border-radius:20px;display:flex;align-items:center;
+            justify-content:center;cursor:pointer;user-select:none}
+  .joystick.sel{border-color:var(--amber);box-shadow:0 0 0 2px rgba(245,158,11,.25)}
+  .joystick .modelab{position:absolute;top:12px;left:16px;font-size:10px;letter-spacing:.12em;
+                     text-transform:uppercase;color:#555;font-weight:700;pointer-events:none}
+  .joystick.bound .modelab{color:var(--amber)}
+  .joy-dot{position:absolute;width:18px;height:18px;background:var(--amber);border-radius:50%;
+           transform:translate(-50%,-50%);left:50%;top:50%;pointer-events:none;display:none}
+  .joystick.show-dot .joy-dot{display:block}
+
+  /* Up/down stacked in the center column; left/right span both rows and
+     sit vertically centered on the seam between them — compact, no empty middle cell */
+  .digrid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);
+          grid-template-rows:repeat(2,1fr);place-items:center;pointer-events:none}
+  .digrid .cell{position:relative;pointer-events:auto;width:64px;height:64px;background:var(--surf);
+                border-radius:12px}
+  .digrid .cell .lab{font-size:16px}
+  .digrid .u{grid-area:1/2} .digrid .d{grid-area:2/2}
+  .digrid .l{grid-row:1/3;grid-column:1} .digrid .r{grid-row:1/3;grid-column:3}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:10px;color:var(--mut);
+          letter-spacing:.05em;max-width:520px}
+  .lg{display:flex;align-items:center;gap:5px}
+  .sw{width:9px;height:9px;border-radius:2px}
+
+  /* ── Bottom sheet ── */
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--surf);border-top:1px solid var(--brd);
+         border-radius:18px 18px 0 0;z-index:40;transform:translateY(100%);transition:transform .24s ease;
+         max-height:78vh;display:flex;flex-direction:column;
+         padding-bottom:env(safe-area-inset-bottom)}
+  .sheet.open{transform:translateY(0)}
+  .sheet-handle{display:flex;justify-content:center;padding:10px 0 6px;flex-shrink:0}
+  .sheet-handle span{width:36px;height:4px;border-radius:2px;background:var(--brd)}
+  .sheet-body{padding:6px 20px 24px;overflow-y:auto}
+  .side-t{font-size:22px;font-weight:700;letter-spacing:.03em;color:var(--amber);text-transform:uppercase;line-height:1}
+  .side-s{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.12em;margin:5px 0 18px}
+  .fl{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:16px 0 7px}
+
+  .types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .typeb{min-height:46px;padding:10px 4px;border:1px solid var(--brd);background:var(--raise);
+         color:var(--mut);font:inherit;font-size:11px;font-weight:600;letter-spacing:.04em;
+         text-transform:uppercase;cursor:pointer;text-align:center;line-height:1.3;border-radius:6px}
+  .typeb:active{color:#eee}
+  .typeb.active{color:var(--bg)}
+
+  .steps{display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin:6px 0 10px}
+  .schip{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;
+         background:var(--raise);border:1px solid var(--t-macro);font-size:12px;color:var(--t-macro)}
+  .schip i{font-style:normal;font-size:9px;letter-spacing:.08em;opacity:.5}
+  .schip .x{cursor:pointer;opacity:.6;font-size:15px;line-height:1}
+  .schip .x:active{opacity:1}
+  .steprow{display:flex;gap:8px}
+  .steprow select{flex:1}
+  .stadd{min-height:46px;padding:0 16px;background:none;border:1px solid var(--t-macro);border-radius:6px;
+         color:var(--t-macro);font:inherit;font-size:12px;font-weight:600;
+         text-transform:uppercase;cursor:pointer;white-space:nowrap}
+  .stadd:active{background:var(--t-macro);color:var(--bg)}
+
+  .stypes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0 10px}
+  .stypeb{min-height:38px;padding:8px 4px;border:1px solid var(--brd);background:var(--raise);
+          color:var(--mut);font:inherit;font-size:10px;font-weight:600;letter-spacing:.04em;
+          text-transform:uppercase;cursor:pointer;text-align:center;border-radius:6px}
+  .stypeb.on{background:var(--t-macro);border-color:var(--t-macro);color:var(--bg)}
+  .mods{display:flex;gap:6px;margin:0 0 8px}
+  .modb{flex:1;min-height:40px;border:1px solid var(--brd);background:var(--raise);color:var(--mut);
+        font:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:6px}
+  .modb.on{background:var(--t-macro);border-color:var(--t-macro);color:var(--bg)}
+  .stepms{width:100%;background:var(--raise);border:1px solid var(--brd);color:#eee;font:inherit;
+          font-size:13px;padding:11px 12px;outline:none;border-radius:8px;min-height:46px}
+  .stepms:focus{border-color:var(--amber)}
+
+  .clear{width:100%;margin-top:18px;min-height:46px;background:none;border:1px solid var(--brd);
+         border-radius:8px;color:var(--mut);font:inherit;font-size:11px;text-transform:uppercase;
+         letter-spacing:.08em;cursor:pointer}
+  .clear:active{border-color:var(--t-system);color:var(--t-system)}
+  .empty{color:#555;font-size:13px;text-align:center;line-height:1.9;padding:30px 0 10px}
+  .hint{font-size:11px;color:#555;line-height:1.7;margin-top:12px}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--raise);
+         border:1px solid var(--brd);color:#eee;padding:10px 18px;border-radius:999px;font-size:12px;
+         letter-spacing:.04em;z-index:60;opacity:0;pointer-events:none;transition:opacity .2s ease}
+  .toast.show{opacity:1}
+
+  /* ── Larger screens ── */
+  @media (min-width:700px){
+    .layout{flex-direction:row;align-items:flex-end;justify-content:center;gap:36px}
+    .right{flex-direction:column;align-items:flex-end;gap:18px}
+    .sheet{left:auto;right:0;bottom:0;top:0;width:380px;max-width:90vw;border-radius:16px 0 0 16px;
+           border-top:none;border-left:1px solid var(--brd);transform:translateX(100%);max-height:none}
+    .sheet.open{transform:translateX(0)}
+    .sheet-handle{display:none}
+    .sheet-body{padding:20px 22px 30px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hdr">
+    <button class="iconbtn" id="menuBtn" title="Menu" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <span class="logo">KeyMapper</span>
+    <span class="sp"></span>
+    <div class="connwrap">
+      <span class="pill" id="connPill"><span class="pdot"></span><span id="connLabel">Disconnected</span></span>
+      <button class="linkbox" id="connectBox" title="Connect device" aria-label="Connect device">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="ctxbar" id="ctxBar">
+    <span class="cdot" id="ctxDot"></span>
+    <div class="ctxtext">
+      <span class="clabel" id="ctxLabel">Active profile</span>
+      <span class="cname" id="ctxName">—</span>
+      <span class="csub" id="ctxSub" style="display:none"></span>
+    </div>
+    <button class="ctxbtn" id="ctxSetActive" style="display:none">Set active</button>
+  </div>
+
+  <div class="backdrop" id="backdrop"></div>
+
+  <nav class="drawer" id="drawer">
+    <div class="drawer-hd">
+      <div class="t">KeyMapper</div>
+      <div class="s" id="devname">no device connected</div>
+    </div>
+    <div class="dsec">
+      <label class="dlabel">Profiles</label>
+      <div id="profileGroups"></div>
+      <div class="npform" id="newProfileForm" style="display:none">
+        <input type="text" id="npName" placeholder="Profile name" maxlength="40"/>
+        <label class="fl">Group</label>
+        <select id="npGroup"></select>
+        <input type="text" id="npNewGroup" placeholder="New group name" maxlength="30" style="display:none"/>
+        <div class="row">
+          <button class="dbtn" id="npCancel">Cancel</button>
+          <button class="dbtn acc" id="npCreate">Create</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="dbtn full" id="newProfileBtn">+ New profile</button>
+      </div>
+    </div>
+    <div class="dsec">
+      <label class="dlabel">Backup</label>
+      <div class="row">
+        <button class="dbtn" id="exportBtn">↓ Export</button>
+        <button class="dbtn" id="importBtn">↑ Import</button>
+      </div>
+      <input type="file" id="fileInput" accept=".json,application/json" style="display:none"/>
+      <div class="dhint">Bindings save to the device automatically as you edit. Export/import are just for moving a profile to or from a JSON file.</div>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="layout">
+      <div class="col">
+        <div class="grid" id="grid"></div>
+        <div class="joystick" id="joystick">
+          <span class="modelab" id="joyModeLab"></span>
+          <div class="joy-dot" id="joyDot"></div>
+          <div class="digrid" id="digrid" style="display:none"></div>
+        </div>
+      </div>
+      <div class="right">
+        <div class="hat" id="hat"></div>
+        <div class="thumb" id="thumb"></div>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </main>
+
+  <div class="backdrop" id="sheetBackdrop"></div>
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle"><span></span></div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ─── BLE UUIDs — match these in your ESP-IDF firmware ───
+const BLE_SVC = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const BLE_CFG = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+const BLE_IN  = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
+
+// ─── Binding categories ───
+const TYPES = [
+  { id:"key",     label:"Keyboard", color:"#10b981" },
+  { id:"mouse",   label:"Mouse",    color:"#3b82f6" },
+  { id:"gamepad", label:"Gamepad",  color:"#a855f7" },
+  { id:"media",   label:"Media",    color:"#f59e0b" },
+  { id:"system",  label:"System",   color:"#ef4444" },
+  { id:"macro",   label:"Macro",    color:"#06b6d4" },
+];
+const TYPE_COLOR = Object.fromEntries(TYPES.map(t=>[t.id,t.color]));
+
+const KEYS = [
+  "A","B","C","D","E","F","G","H","I","J","K","L","M",
+  "N","O","P","Q","R","S","T","U","V","W","X","Y","Z",
+  "1","2","3","4","5","6","7","8","9","0",
+  "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
+  "ENTER","SPACE","ESCAPE","TAB","BACKSPACE","DELETE",
+  "UP","DOWN","LEFT","RIGHT","HOME","END","PGUP","PGDN",
+];
+const MOUSE   = ["left_click","right_click","middle_click","scroll_up","scroll_down","button4","button5"];
+const GAMEPAD = ["A","B","X","Y","LB","RB","LT","RT","L3","R3","Start","Select","Home"];
+const MEDIA   = ["play_pause","stop","next","prev","vol_up","vol_down","mute"];
+const SYSTEM  = ["copy","paste","cut","undo","redo","save","select_all","find","screenshot","lock_screen"];
+const OPTIONS = { mouse:MOUSE, gamepad:GAMEPAD, media:MEDIA, system:SYSTEM };
+
+// Modifiers held alongside a key. Bare names are the left-hand key; the firmware
+// also accepts L/R-prefixed forms and CMD/WIN/META/OPT aliases.
+const MODS = ["CTRL","SHIFT","ALT","GUI"];
+const MOD_GLYPH = { CTRL:"⌃", SHIFT:"⇧", ALT:"⌥", GUI:"⌘" };
+
+// Categories a macro step can be. Steps reuse the binding vocabulary, plus a
+// delay step that emits nothing.
+const STEP_TYPES = ["key","mouse","gamepad","media","system","delay"];
+
+// What a press does while the same macro is still playing. Omitting the field
+// means "restart", so v4 profiles written before it existed still mean the same.
+const RETRIGGER_MODES = [["restart","restart it"],["ignore","let it finish"]];
+const SCHEMA_VERSION = 4;
+
+// ─── Physical inputs (laid out like a mobile macropad) ───
+const GRID_KEYS = [1,2,3,4,5,6,7,8,9,10,11,12].map(n=>({ id:"K"+n, label:String(n), grp:"key" }));
+const HAT = [
+  { id:"HAT_U", label:"↑", grp:"hat" },
+  { id:"HAT_L", label:"←", grp:"hat" },
+  { id:"HAT_C", label:"●", grp:"hat" },
+  { id:"HAT_R", label:"→", grp:"hat" },
+  { id:"HAT_D", label:"↓", grp:"hat" },
+];
+const THUMB = [
+  { id:"S1", label:"S1", grp:"aux" },
+  { id:"S2", label:"S2", grp:"aux" },
+];
+const DIGITAL_INPUTS = [
+  { id:"JD_U", label:"↑", grp:"digital", cls:"u" },
+  { id:"JD_L", label:"←", grp:"digital", cls:"l" },
+  { id:"JD_R", label:"→", grp:"digital", cls:"r" },
+  { id:"JD_D", label:"↓", grp:"digital", cls:"d" },
+];
+const JOY_MODES = [
+  { id:"analog",  label:"Analog"  },
+  { id:"digital", label:"Digital" },
+  { id:"mouse",   label:"Mouse"   },
+];
+
+// ─── Live input mirror ───
+// The device notifies a packed uint32 of what's currently held, one bit per
+// input. It sends bit positions, not names, so this order must stay identical to
+// INPUT_IDS[] in the firmware's config.c — reordering either side silently lights
+// up the wrong key rather than failing.
+const LIVE_INPUT_ORDER = [
+  "K1","K2","K3","K4","K5","K6","K7","K8","K9","K10","K11","K12",
+  "HAT_U","HAT_D","HAT_L","HAT_R","HAT_C",
+  "S1","S2",
+  "JD_U","JD_D","JD_L","JD_R",
+];
+let liveBits = 0;
+const isLive = id => { const i = LIVE_INPUT_ORDER.indexOf(id); return i >= 0 && !!(liveBits & (1 << i)); };
+
+function decodeInputs(dv){ return dv && dv.byteLength >= 4 ? dv.getUint32(0, true) : 0; }
+
+// Repaint only what changed — this runs on every press and release.
+function applyLiveInputs(bits){
+  const changed = bits ^ liveBits;
+  liveBits = bits;
+  if(!changed) return;
+  LIVE_INPUT_ORDER.forEach((id,i)=>{
+    if(!(changed & (1 << i))) return;
+    const on = !!(bits & (1 << i));
+    document.querySelectorAll('.cell[data-id="'+id+'"]').forEach(el=> el.classList.toggle('live', on));
+  });
+}
+const JOY_HINTS = {
+  analog:  "Raw axis values sent as HID gamepad left stick.",
+  digital: "4 direction buttons appear on the pad — bind each independently below.",
+  mouse:   "Pad controls cursor movement.",
+};
+
+// ─── State ───
+let bind = {};                 // { inputId: {type, ...} }
+let joy  = { mode:"analog" };  // joystick config
+let sel  = null;               // selected input id ("JOY" for joystick)
+let editType = "key";          // active category tab in sheet
+
+// ─── Profiles ───
+// Two ids matter: `currentId` is the profile loaded into the editor (what you're
+// looking at / changing right now); `liveId` is the profile the device actually
+// runs. They're usually the same, but "Set active" lets you point the device at
+// a different profile than the one you happen to be tweaking.
+const PROFILES_KEY = "keymapper.profiles";
+const CURRENT_KEY  = "keymapper.current";
+const LIVE_KEY     = "keymapper.live";
+const UNGROUPED    = "Ungrouped";
+let profiles = [];
+let currentId = null;
+let liveId = null;
+let expandedGroups = new Set();
+
+function loadProfiles(){
+  try{ profiles = JSON.parse(localStorage.getItem(PROFILES_KEY)) || []; }catch{ profiles = []; }
+  if(!profiles.length){
+    profiles = [{ id:"default", name:"Default", group:"", bindings:{}, joystick:{mode:"analog"} }];
+  }
+  profiles.forEach(p=>{ if(p.group==null) p.group = ""; normalizeBindings(p.bindings); });
+  currentId = localStorage.getItem(CURRENT_KEY);
+  if(!profiles.find(p=>p.id===currentId)) currentId = profiles[0].id;
+  liveId = localStorage.getItem(LIVE_KEY);
+  if(!profiles.find(p=>p.id===liveId)) liveId = currentId;
+  expandedGroups.add(groupLabel(currentProfile()));
+}
+function persistProfiles(){
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  localStorage.setItem(CURRENT_KEY, currentId);
+  localStorage.setItem(LIVE_KEY, liveId);
+}
+function currentProfile(){ return profiles.find(p=>p.id===currentId); }
+function liveProfile(){ return profiles.find(p=>p.id===liveId); }
+function groupLabel(p){ return (p && p.group) ? p.group : UNGROUPED; }
+// Doubles as the on-device filename (see "Backup" hint / device storage notes):
+// timestamp + random suffix keeps it short, unique, and filesystem-safe ([0-9a-z]).
+function makeProfileId(){
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+function loadCurrentIntoEditor(){
+  const p = currentProfile();
+  bind = JSON.parse(JSON.stringify(p.bindings||{}));
+  joy  = JSON.parse(JSON.stringify(p.joystick||{mode:"analog"}));
+  sel = null;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ─── BLE ───
+// All communication uses a single request/response pattern over BLE_CFG:
+// web writes one JSON command, firmware responds with JSON.
+//
+// The command is written in a single writeValueWithResponse call. Commands
+// larger than the negotiated ATT MTU (e.g. a `put` with a full profile, ~1 KB)
+// are carried by the ATT layer as a queued/long write and reassembled by the
+// firmware's GATT stack into one write callback — so the firmware sees the
+// whole command intact. Do NOT pre-split the command into separate writes:
+// each write is an independent ATT transaction and the firmware would parse
+// each fragment as its own (malformed) command.
+//
+// Commands the firmware must handle:
+//   {"cmd":"ls"}                        → {"ids":["<id>",…],"liveId":"<id>"}
+//   {"cmd":"get","id":"<id>"}           → {version,id,name,group,bindings,joystick}
+//   {"cmd":"put","profile":{…}}         → {"ok":true}
+//   {"cmd":"del","id":"<id>"}           → {"ok":true}
+//   {"cmd":"live","id":"<id>"}          → {"ok":true}
+//
+// On-device layout: /profiles/<id>.json per profile, /config.json for liveId.
+//
+// A second characteristic (BLE_IN) notifies a 4-byte LE uint32 bitmap of which
+// inputs are physically held, for the live mirror. See BLE_PROTOCOL.md.
+const ble = {
+  dev:null, char:null, inChar:null,
+  async connect(){
+    const dev = await navigator.bluetooth.requestDevice({ filters:[{ services:[BLE_SVC] }] });
+    const srv = await dev.gatt.connect();
+    const svc = await srv.getPrimaryService(BLE_SVC);
+    this.char = await svc.getCharacteristic(BLE_CFG);
+    this.dev = dev;
+    dev.addEventListener("gattserverdisconnected", ()=>{
+      this.dev=null; this.char=null; this.inChar=null;
+      applyLiveInputs(0);   // don't leave keys lit from a device that's gone
+      setConn(false,"");
+    });
+    await this.watchInputs(svc);
+    return dev.name || "Device";
+  },
+  // Subscribe to the live input mirror. Firmware without the characteristic is
+  // still perfectly usable for editing, so this must not fail the connection.
+  async watchInputs(svc){
+    try{
+      const ch = await svc.getCharacteristic(BLE_IN);
+      // Read first, then subscribe: the device pushes current state on subscribe,
+      // so a slower read can't land after a fresher notify and undo it.
+      applyLiveInputs(decodeInputs(await ch.readValue()));
+      ch.addEventListener('characteristicvaluechanged',
+                          e=> applyLiveInputs(decodeInputs(e.target.value)));
+      await ch.startNotifications();
+      this.inChar = ch;
+    }catch(err){
+      this.inChar = null;
+      console.warn('live input mirror unavailable:', err.message);
+    }
+  },
+  async disconnect(){
+    this.dev && this.dev.gatt.disconnect();
+    this.dev=null; this.char=null; this.inChar=null;
+    applyLiveInputs(0);
+  },
+  async cmd(obj){
+    if(!this.char) throw new Error("Not connected");
+    const buf = new TextEncoder().encode(JSON.stringify(obj));
+    await this.char.writeValueWithResponse(buf);
+    const dv = await this.char.readValue();
+    const resp = JSON.parse(new TextDecoder().decode(dv.buffer));
+    // Firmware signals failure with {"error":"..."}; surface it so callers'
+    // catch blocks handle it instead of treating the command as succeeded.
+    if(resp && resp.error) throw new Error(resp.error);
+    return resp;
+  },
+  get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected); }
+};
+
+const config = () => ({ version:SCHEMA_VERSION, name:currentProfile().name, group:currentProfile().group, bindings:bind, joystick:joy });
+
+// ─── Keep the device in sync with whatever's loaded ───
+// Binding/joystick edits are debounced into a single `put` for the one changed
+// profile. Delete and set-active send their own targeted commands immediately.
+let syncTimer = null;
+let syncPendingId = null;
+function scheduleProfileSync(){
+  const p = currentProfile();
+  if(p){
+    p.bindings = JSON.parse(JSON.stringify(bind));
+    p.joystick = JSON.parse(JSON.stringify(joy));
+    syncPendingId = p.id;
+  }
+  persistProfiles();
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncToDevice, 500);
+}
+async function syncToDevice(){
+  if(!ble.connected) return;
+  const id = syncPendingId;
+  syncPendingId = null;
+  const p = profiles.find(x=>x.id===id);
+  if(!p) return;
+  try{
+    await ble.cmd({ cmd:'put', profile:{ version:SCHEMA_VERSION, ...p } });
+    toast('✓ synced to device');
+  }catch(e){ toast('sync error: '+e.message); }
+}
+async function syncFromDevice(){
+  try{
+    const { ids, liveId:devLiveId } = await ble.cmd({ cmd:'ls' });
+    if(!ids || !ids.length) return;
+    const loaded = [];
+    for(const id of ids){
+      try{
+        const p = await ble.cmd({ cmd:'get', id });
+        if(p && p.id){ if(p.group==null) p.group=''; normalizeBindings(p.bindings); loaded.push(p); }
+      }catch{}
+    }
+    if(!loaded.length) return;
+    profiles = loaded;
+    liveId = profiles.find(p=>p.id===devLiveId) ? devLiveId : profiles[0].id;
+    currentId = liveId;
+    loadCurrentIntoEditor();
+    expandedGroups = new Set([groupLabel(currentProfile())]);
+    persistProfiles();
+    renderProfileGroups();
+    renderContextBar();
+    closeSheet();
+    render();
+    toast('Loaded '+profiles.length+' profile'+(profiles.length===1?'':'s')+' from device');
+  }catch(e){ /* device has nothing yet — keep local copy */ }
+}
+
+// ─── Macro steps ───
+// A step is {type:"key",keys:[…],mods:[…]} | {type:"mouse"|"media"|"system",action}
+// | {type:"gamepad",button} | {type:"delay",ms}. Schema v3 wrote steps as bare key
+// strings, so normalize on the way in and let the editor assume one shape.
+// `hold` is preserved but not exposed in the UI — hand-authored profiles keep it.
+function normStep(s){
+  if(typeof s === "string") return { type:"key", keys:[s] };
+  if(!s || typeof s !== "object") return null;
+  const t = STEP_TYPES.includes(s.type) ? s.type : "key";
+  if(t === "delay"){
+    const ms = Math.round(+s.ms);
+    return ms > 0 ? { type:"delay", ms } : null;
+  }
+  const o = { type:t };
+  if(t === "key"){
+    o.keys = Array.isArray(s.keys) ? s.keys.slice() : (s.key ? [s.key] : []);
+    const mods = Array.isArray(s.mods) ? s.mods.filter(m=>typeof m === "string") : [];
+    if(mods.length) o.mods = mods;
+    if(!o.keys.length && !mods.length) return null;
+  } else {
+    const valKey = t === "gamepad" ? "button" : "action";
+    if(typeof s[valKey] !== "string" || !s[valKey]) return null;
+    o[valKey] = s[valKey];
+  }
+  if(+s.hold > 0) o.hold = Math.round(+s.hold);
+  return o;
+}
+// Fold legacy/foreign shapes in a bindings map into the current step schema.
+function normalizeBindings(bindings){
+  Object.values(bindings || {}).forEach(b=>{
+    if(!b || b.type !== "macro") return;
+    b.steps = (b.steps || []).map(normStep).filter(Boolean);
+    // "restart" is the firmware default, so it stays out of the JSON entirely —
+    // profiles are size-capped on the wire and every macro would pay for it.
+    if(b.retrigger !== "ignore") delete b.retrigger;
+  });
+  return bindings || {};
+}
+// "⌃⇧C" — modifiers as glyphs, then the keys held with them.
+function chordLabel(mods, keys){
+  return (mods||[]).map(m=>MOD_GLYPH[m] || m+"+").join("") + (keys||[]).join("+");
+}
+// Chips carry a dim type tag, so "A" the key and "A" the gamepad button never
+// look alike. Tag + text rather than icons: no emoji font to depend on.
+const STEP_TAG = { key:"KEY", mouse:"MOUSE", gamepad:"PAD", media:"MEDIA", system:"SYS", delay:"DELAY" };
+function stepLabel(s){
+  if(!s) return "?";
+  switch(s.type){
+    case "delay":   return s.ms + "ms";
+    case "key":     return chordLabel(s.mods, s.keys);
+    case "gamepad": return s.button;
+    case "mouse":
+    case "media":
+    case "system":  return s.action;
+  }
+  return "?";
+}
+
+// ─── Short label shown on an input ───
+function bindShort(b){
+  if(!b) return null;
+  switch(b.type){
+    case "key":     return chordLabel(b.mods, b.key ? [b.key] : (b.keys||[]));
+    case "mouse":   return b.action||"";
+    case "gamepad": return b.button||"";
+    case "media":   return b.action||"";
+    case "system":  return b.action||"";
+    case "macro":   return ((b.steps||[]).length)+" step"+((b.steps||[]).length===1?"":"s");
+    default: return null;
+  }
+}
+const trunc = (s,n)=> s && s.length>n ? s.slice(0,n)+"…" : s;
+
+function hexFade(hex, a){
+  const n = parseInt(hex.slice(1),16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  return 'rgba('+r+','+g+','+b+','+(a==null?0.16:a)+')';
+}
+
+// ─── Build a clickable input cell ───
+function makeCell(inp, extraClass){
+  const el = document.createElement('div');
+  el.className = 'cell' + (extraClass ? ' '+extraClass : '');
+  el.dataset.id = inp.id;
+  const lab = document.createElement('span');
+  lab.className = 'lab';
+  lab.textContent = inp.label;
+  el.appendChild(lab);
+  el.addEventListener('click', e=>{ e.stopPropagation(); selectInput(inp.id); });
+  return el;
+}
+
+function paintCell(el, id){
+  const b = bind[id];
+  el.classList.toggle('sel', sel===id);
+  el.classList.toggle('bound', !!b);
+  el.classList.toggle('live', isLive(id));   // re-renders rebuild cells; keep held keys lit
+  let sub = el.querySelector('.sub');
+  if(b){
+    const col = TYPE_COLOR[b.type];
+    el.style.background = hexFade(col, sel===id ? 0.28 : 0.16);
+    el.style.borderColor = sel===id ? 'var(--amber)' : col;
+    el.querySelector('.lab').style.color = '#fff';
+    const short = trunc(bindShort(b), 9);
+    if(!sub){ sub = document.createElement('span'); sub.className='sub'; el.appendChild(sub); }
+    sub.textContent = short;
+    sub.style.color = col;
+  } else {
+    el.style.background = '';
+    el.style.borderColor = sel===id ? 'var(--amber)' : '';
+    el.querySelector('.lab').style.color = '';
+    if(sub) sub.remove();
+  }
+}
+
+// ─── Render: macropad inputs ───
+function renderGrid(){
+  const host = document.getElementById('grid');
+  host.innerHTML = '';
+  GRID_KEYS.forEach(inp=> host.appendChild(makeCell(inp)));
+  refreshCells();
+}
+function renderHat(){
+  const host = document.getElementById('hat');
+  host.innerHTML = '';
+  const order = ['spacer','HAT_U','spacer','HAT_L','HAT_C','HAT_R','spacer','HAT_D','spacer'];
+  order.forEach(key=>{
+    if(key==='spacer'){ const sp=document.createElement('div'); sp.className='spacer'; host.appendChild(sp); return; }
+    const inp = HAT.find(h=>h.id===key);
+    const cell = makeCell(inp, key==='HAT_C' ? 'center' : '');
+    host.appendChild(cell);
+  });
+  refreshCells();
+}
+function renderThumb(){
+  const host = document.getElementById('thumb');
+  host.innerHTML = '';
+  THUMB.forEach(inp=> host.appendChild(makeCell(inp)));
+  refreshCells();
+}
+function renderJoystick(){
+  const j = document.getElementById('joystick');
+  j.classList.toggle('sel', sel==='JOY');
+  j.classList.add('bound'); // mode label always reflects the active mode, so always highlight it
+  j.classList.toggle('show-dot', joy.mode !== 'digital');
+  document.getElementById('joyModeLab').textContent = (joy.mode||'analog').toUpperCase();
+
+  const dg = document.getElementById('digrid');
+  if(joy.mode === 'digital'){
+    dg.style.display = '';
+    dg.innerHTML = '';
+    DIGITAL_INPUTS.forEach(inp=>{
+      const cell = makeCell(inp, inp.cls);
+      dg.appendChild(cell);
+    });
+    refreshCells();
+  } else {
+    dg.style.display = 'none';
+    dg.innerHTML = '';
+  }
+}
+function refreshCells(){
+  document.querySelectorAll('.cell[data-id]').forEach(el=> paintCell(el, el.dataset.id));
+}
+function renderInputs(){
+  renderGrid(); renderHat(); renderThumb(); renderJoystick();
+}
+
+// ─── Render: legend ───
+function renderLegend(){
+  document.getElementById("legend").innerHTML =
+    TYPES.map(t=>'<span class="lg"><span class="sw" style="background:'+t.color+'"></span>'+t.label+'</span>').join("");
+}
+
+// ─── Render: active-profile context bar ──
+// Always shows what's currently loaded. Green = it's also the live/device
+// profile; amber = you're editing something other than the live profile, and
+// the "Set active" button appears so you can promote it.
+function renderContextBar(){
+  const cur = currentProfile();
+  const live = liveProfile();
+  const isLive = currentId === liveId;
+  document.getElementById('ctxBar').classList.toggle('editing', !isLive);
+  document.getElementById('ctxLabel').textContent = isLive ? 'Active profile' : 'Editing';
+  document.getElementById('ctxName').textContent = cur ? cur.name : '—';
+  const sub = document.getElementById('ctxSub');
+  if(!isLive && live){ sub.textContent = 'Active profile is "'+live.name+'"'; sub.style.display = ''; }
+  else sub.style.display = 'none';
+  document.getElementById('ctxSetActive').style.display = (isLive || !ble.connected) ? 'none' : '';
+}
+
+// ─── Render: profiles grouped by tag, expandable ──
+function renderProfileGroups(){
+  const host = document.getElementById('profileGroups');
+  const byGroup = {};
+  profiles.forEach(p=>{
+    const g = groupLabel(p);
+    (byGroup[g] = byGroup[g] || []).push(p);
+  });
+  const names = Object.keys(byGroup).sort((a,b)=>{
+    if(a===UNGROUPED) return 1;
+    if(b===UNGROUPED) return -1;
+    return a.localeCompare(b);
+  });
+  host.innerHTML = names.map(g=>{
+    const open = expandedGroups.has(g);
+    const rows = byGroup[g].map(p=>
+      '<div class="prow'+(p.id===currentId?' cur':'')+(p.id===liveId?' live':'')+'" data-pid="'+p.id+'">'+
+        '<span class="pdot"></span>'+
+        '<span class="pname">'+escapeHtml(p.name)+'</span>'+
+        (p.id===liveId ? '<span class="pbadge">Active</span>' : '')+
+        '<button class="prowdel" data-pid="'+p.id+'" title="Delete profile" aria-label="Delete '+escapeHtml(p.name)+'">'+
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>'+
+        '</button>'+
+      '</div>'
+    ).join('');
+    return '<div class="pgroup'+(open?' open':'')+'" data-grp="'+escapeHtml(g)+'">'+
+             '<div class="pghd">'+
+               '<svg class="pgchev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>'+
+               '<span class="pgname">'+escapeHtml(g)+'</span>'+
+               '<span class="pgcount">'+byGroup[g].length+'</span>'+
+             '</div>'+
+             '<div class="pgrows">'+rows+'</div>'+
+           '</div>';
+  }).join('');
+
+  host.querySelectorAll('.pghd').forEach(el=> el.addEventListener('click', ()=>{
+    const grp = el.parentElement.getAttribute('data-grp');
+    if(expandedGroups.has(grp)) expandedGroups.delete(grp); else expandedGroups.add(grp);
+    renderProfileGroups();
+  }));
+  host.querySelectorAll('.prow').forEach(el=> el.addEventListener('click', ()=>{
+    const id = el.getAttribute('data-pid');
+    closeDrawer();
+    if(id === currentId) return;
+    currentId = id;
+    loadCurrentIntoEditor();
+    persistProfiles();
+    renderProfileGroups();
+    renderContextBar();
+    closeSheet();
+    render();
+    toast('Editing "'+currentProfile().name+'"');
+  }));
+  host.querySelectorAll('.prowdel').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    deleteProfile(el.getAttribute('data-pid'));
+  }));
+}
+
+// ─── Delete a profile ──
+// Always leaves at least one profile behind. If you delete the live or
+// currently-loaded one, the next remaining profile is promoted so the device
+// (and the editor) are never left pointing at something that no longer exists.
+function deleteProfile(id){
+  if(!ble.connected){ toast('Connect your device to manage profiles'); return; }
+  if(profiles.length <= 1){ toast("Can't delete your only profile"); return; }
+  const p = profiles.find(x=>x.id===id);
+  if(!p) return;
+  if(!confirm('Delete "'+p.name+'"? This can\'t be undone.')) return;
+
+  const wasLive = liveId === id;
+  const wasCurrent = currentId === id;
+  profiles = profiles.filter(x=>x.id!==id);
+  if(wasLive) liveId = profiles[0].id;
+  if(wasCurrent){ currentId = liveId; loadCurrentIntoEditor(); }
+
+  persistProfiles();
+  renderProfileGroups();
+  renderContextBar();
+  closeSheet();
+  render();
+  toast(wasLive ? 'Deleted "'+p.name+'" — "'+currentProfile().name+'" is now active' : 'Deleted "'+p.name+'"');
+  if(ble.connected){
+    (async()=>{
+      try{
+        await ble.cmd({ cmd:'del', id });
+        if(wasLive) await ble.cmd({ cmd:'live', id:liveId });
+      }catch(e){ toast('device sync error: '+e.message); }
+    })();
+  }
+}
+
+// ─── Bottom sheet (binding editor) ───
+function openSheet(){
+  document.getElementById('sheet').classList.add('open');
+  document.getElementById('sheetBackdrop').classList.add('show');
+}
+function closeSheet(){
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('sheetBackdrop').classList.remove('show');
+  sel = null;
+  refreshCells();
+  renderJoystick();
+}
+function selectInput(id){
+  if(!ble.connected){ toast('Connect your device to edit bindings'); return; }
+  sel = id;
+  editType = (id!=="JOY" && bind[id]) ? bind[id].type : editType;
+  resetStepDraft();
+  refreshCells();
+  renderJoystick();
+  renderSheetBody();
+  openSheet();
+}
+
+function renderSheetBody(){
+  const host = document.getElementById('sheetBody');
+  if(!sel){ host.innerHTML = '<div class="empty">Tap any button, hat direction,<br/>aux switch or the trackpad<br/>to assign a binding</div>'; return; }
+
+  if(sel === 'JOY'){
+    let modes = JOY_MODES.map(m=>{
+      const on = joy.mode===m.id;
+      return '<button class="typeb'+(on?' active':'')+'" data-jmode="'+m.id+'" style="'+(on?'background:#f59e0b;border-color:#f59e0b':'')+'">'+m.label+'</button>';
+    }).join("");
+    host.innerHTML =
+      '<div class="side-t">Trackpad</div><div class="side-s">palm rest · joystick</div>'+
+      '<label class="fl">Output Mode</label>'+
+      '<div class="types" style="grid-template-columns:repeat(3,1fr)">'+modes+'</div>'+
+      '<div class="hint">'+JOY_HINTS[joy.mode]+'</div>';
+    host.querySelectorAll("[data-jmode]").forEach(el=>el.addEventListener("click",()=>{
+      joy.mode = el.getAttribute("data-jmode");
+      renderSheetBody(); renderJoystick();
+      scheduleProfileSync();
+    }));
+    return;
+  }
+
+  const all = [...GRID_KEYS, ...HAT, ...THUMB, ...DIGITAL_INPUTS];
+  const inp = all.find(i=>i.id===sel);
+  const b = bind[sel];
+
+  const tabs = TYPES.map(t=>{
+    const on = editType===t.id;
+    return '<button class="typeb'+(on?' active':'')+'" data-type="'+t.id+'" style="'+(on?'background:'+t.color+';border-color:'+t.color:'')+'">'+t.label+'</button>';
+  }).join("");
+
+  host.innerHTML =
+    '<div class="side-t">'+inp.label+'</div><div class="side-s">'+sel+' · '+inp.grp+'</div>'+
+    '<label class="fl">Category</label>'+
+    '<div class="types">'+tabs+'</div>'+
+    '<div id="typeContent"></div>'+
+    '<button class="clear" id="clearBtn">Clear / Unbind</button>';
+
+  host.querySelectorAll("[data-type]").forEach(el=>el.addEventListener("click",()=>{
+    editType = el.getAttribute("data-type"); renderSheetBody();
+  }));
+  document.getElementById("clearBtn").addEventListener("click",()=>{
+    delete bind[sel]; renderSheetBody(); refreshCells();
+    scheduleProfileSync();
+  });
+
+  renderTypeContent(b);
+}
+
+// Draft of the step currently being built in the macro editor. Kept outside the
+// binding so a half-built step never reaches the device.
+let stepDraft = { type:"key", mods:[], keys:[], value:"", ms:100 };
+function resetStepDraft(){ stepDraft = { type:"key", mods:[], keys:[], value:"", ms:100 }; }
+
+// Turn the draft into a step object, or null if it isn't complete yet.
+function draftToStep(){
+  const d = stepDraft;
+  if(d.type === "delay") return d.ms > 0 ? { type:"delay", ms:+d.ms } : null;
+  if(d.type === "key"){
+    if(!d.keys.length && !d.mods.length) return null;
+    const o = { type:"key", keys:d.keys.slice() };
+    if(d.mods.length) o.mods = d.mods.slice();
+    return o;
+  }
+  if(!d.value) return null;
+  const o = { type:d.type };
+  o[d.type === "gamepad" ? "button" : "action"] = d.value;
+  return o;
+}
+
+function renderMacroEditor(host, cur){
+  const steps = (cur && cur.steps) ? cur.steps : [];
+  const chips = steps.length
+    ? steps.map((s,i)=>'<span class="schip"><i>'+(STEP_TAG[s.type]||"?")+'</i>'+
+                       escapeHtml(stepLabel(s))+
+                       '<span class="x" data-rm="'+i+'">✕</span></span>').join("")
+    : '<span style="font-size:10px;color:#444">empty — build a step below</span>';
+
+  const typeBtns = STEP_TYPES.map(t=>
+    '<button class="stypeb'+(stepDraft.type===t?' on':'')+'" data-stype="'+t+'">'+t+'</button>').join("");
+
+  // Per-type builder controls.
+  let controls = "";
+  if(stepDraft.type === "key"){
+    controls =
+      '<div class="mods">'+MODS.map(m=>
+        '<button class="modb'+(stepDraft.mods.includes(m)?' on':'')+'" data-mod="'+m+'">'+
+        m+'</button>').join("")+'</div>'+
+      '<select id="stepKey"><option value="">key (optional with modifiers)…</option>'+
+        KEYS.map(k=>'<option value="'+k+'"'+(stepDraft.keys[0]===k?' selected':'')+'>'+k+'</option>').join("")+
+      '</select>';
+  } else if(stepDraft.type === "delay"){
+    controls = '<input class="stepms" id="stepMs" type="number" min="1" max="5000" step="10" '+
+               'value="'+stepDraft.ms+'" placeholder="milliseconds"/>';
+  } else {
+    const list = OPTIONS[stepDraft.type] || [];
+    controls = '<select id="stepVal"><option value="">— select —</option>'+
+      list.map(o=>'<option value="'+o+'"'+(stepDraft.value===o?' selected':'')+'>'+o+'</option>').join("")+
+      '</select>';
+  }
+
+  // Retrigger mode is a property of the macro, so it only makes sense once the
+  // macro exists — an empty one isn't stored at all (see setSteps).
+  const mode = (cur && cur.retrigger === "ignore") ? "ignore" : "restart";
+  const retrig = !steps.length ? "" :
+    '<label class="fl">Pressing again while it plays</label>'+
+    '<div class="stypes">'+
+      RETRIGGER_MODES.map(([v,label])=>
+        '<button class="stypeb'+(mode===v?' on':'')+'" data-retrig="'+v+'">'+label+
+        '</button>').join("")+
+    '</div>';
+
+  host.innerHTML =
+    '<label class="fl">Sequence (plays in order)</label>'+
+    '<div class="steps">'+chips+'</div>'+
+    retrig+
+    '<label class="fl">Add step</label>'+
+    '<div class="stypes">'+typeBtns+'</div>'+
+    controls+
+    '<div class="steprow" style="margin-top:8px"><button class="stadd" id="stepAdd" style="flex:1">+ add step</button></div>'+
+    '<div class="hint">Chord: pick modifiers and a key — ⌃⇧C fires as one keystroke. '+
+    'A delay waits without sending anything. Max 32 steps. '+
+    'Macros never block your other inputs — they keep working while one plays.</div>';
+
+  const setSteps = next=>{
+    if(next.length){
+      const keep = (bind[sel] && bind[sel].type==="macro") ? bind[sel].retrigger : undefined;
+      bind[sel] = { type:"macro", steps:next };
+      if(keep === "ignore") bind[sel].retrigger = keep;   // editing steps mustn't reset the mode
+    }
+    else delete bind[sel];
+    renderMacroEditor(host, bind[sel]);
+    refreshCells();
+    scheduleProfileSync();
+  };
+  const getSteps = ()=> (bind[sel] && bind[sel].type==="macro") ? bind[sel].steps.slice() : [];
+
+  host.querySelectorAll("[data-stype]").forEach(el=>el.addEventListener("click",()=>{
+    stepDraft.type = el.getAttribute("data-stype");
+    stepDraft.value = "";
+    renderMacroEditor(host, bind[sel]);
+  }));
+  host.querySelectorAll("[data-retrig]").forEach(el=>el.addEventListener("click",()=>{
+    if(!bind[sel] || bind[sel].type !== "macro") return;
+    if(el.getAttribute("data-retrig") === "ignore") bind[sel].retrigger = "ignore";
+    else delete bind[sel].retrigger;
+    renderMacroEditor(host, bind[sel]);
+    scheduleProfileSync();
+  }));
+  host.querySelectorAll("[data-mod]").forEach(el=>el.addEventListener("click",()=>{
+    const m = el.getAttribute("data-mod");
+    const i = stepDraft.mods.indexOf(m);
+    if(i < 0) stepDraft.mods.push(m); else stepDraft.mods.splice(i,1);
+    renderMacroEditor(host, bind[sel]);
+  }));
+  const keySel = document.getElementById("stepKey");
+  if(keySel) keySel.addEventListener("change", ()=>{
+    stepDraft.keys = keySel.value ? [keySel.value] : [];
+  });
+  const valSel = document.getElementById("stepVal");
+  if(valSel) valSel.addEventListener("change", ()=>{ stepDraft.value = valSel.value; });
+  const msIn = document.getElementById("stepMs");
+  if(msIn) msIn.addEventListener("input", ()=>{ stepDraft.ms = +msIn.value; });
+
+  document.getElementById("stepAdd").addEventListener("click",()=>{
+    const step = draftToStep();
+    if(!step){ toast('Pick something for this step first'); return; }
+    const next = getSteps();
+    if(next.length >= 32){ toast('Macros are limited to 32 steps'); return; }
+    next.push(step);
+    resetStepDraft();
+    setSteps(next);
+  });
+  host.querySelectorAll("[data-rm]").forEach(el=>el.addEventListener("click",()=>{
+    const next = getSteps();
+    next.splice(+el.getAttribute("data-rm"),1);
+    setSteps(next);
+  }));
+}
+
+function renderTypeContent(b){
+  const host = document.getElementById("typeContent");
+  const cur = (b && b.type===editType) ? b : null;
+
+  if(editType==="key"){
+    const curMods = (cur && cur.mods) ? cur.mods : [];
+    const curKey  = (cur && cur.key) ? cur.key : "";
+    const opts = '<option value="">— select key —</option>' +
+      KEYS.map(k=>'<option value="'+k+'"'+(curKey===k?' selected':'')+'>'+k+'</option>').join("");
+    host.innerHTML =
+      '<label class="fl">Modifiers</label>'+
+      '<div class="mods">'+MODS.map(m=>
+        '<button class="modb'+(curMods.includes(m)?' on':'')+'" data-kmod="'+m+'">'+
+        m+'</button>').join("")+'</div>'+
+      '<label class="fl">Key</label><select id="keySel">'+opts+'</select>'+
+      '<div class="hint">Modifiers are held with the key for as long as the button is down.</div>';
+
+    // Write the chord back, dropping the binding only when nothing is selected.
+    const apply = (mods, key)=>{
+      if(key || mods.length){
+        const o = { type:"key" };
+        if(key) o.key = key;
+        if(mods.length) o.mods = mods;
+        bind[sel] = o;
+      } else delete bind[sel];
+      renderTypeContent(bind[sel]);
+      refreshCells();
+      scheduleProfileSync();
+    };
+    host.querySelectorAll("[data-kmod]").forEach(el=>el.addEventListener("click",()=>{
+      const m = el.getAttribute("data-kmod");
+      const mods = curMods.slice();
+      const i = mods.indexOf(m);
+      if(i < 0) mods.push(m); else mods.splice(i,1);
+      apply(mods, document.getElementById("keySel").value);
+    }));
+    document.getElementById("keySel").addEventListener("change", ()=>{
+      apply(curMods.slice(), document.getElementById("keySel").value);
+    });
+    return;
+  }
+
+  if(editType==="macro"){ renderMacroEditor(host, cur); return; }
+
+  // single-select categories: mouse / gamepad / media / system
+  const list = OPTIONS[editType] || [];
+  const valKey = editType==="gamepad" ? "button" : "action";
+  const opts = '<option value="">— select —</option>'+
+    list.map(o=>'<option value="'+o+'"'+(cur&&cur[valKey]===o?' selected':'')+'>'+o+'</option>').join("");
+  host.innerHTML = '<label class="fl">'+TYPES.find(t=>t.id===editType).label+' action</label><select id="actSel">'+opts+'</select>';
+  document.getElementById("actSel").addEventListener("change",()=>{
+    const v = document.getElementById("actSel").value;
+    if(v){ const o={type:editType}; o[valKey]=v; bind[sel]=o; } else delete bind[sel];
+    refreshCells();
+    scheduleProfileSync();
+  });
+}
+
+function render(){ renderInputs(); renderLegend(); renderSheetBody(); }
+
+// ─── Toast ───
+let toastTimer = null;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove('show'), 2200);
+}
+
+// ─── Header / connection helpers ───
+function setConn(on, name){
+  const pill = document.getElementById('connPill');
+  pill.classList.toggle('on', on);
+  document.getElementById('connLabel').textContent = on ? (name || 'Connected') : 'Disconnected';
+  document.getElementById('devname').textContent = on ? (name || 'Device') + ' · connected' : 'no device connected';
+  const box = document.getElementById('connectBox');
+  box.classList.toggle('on', on);
+  box.title = on ? 'Disconnect device' : 'Connect device';
+  document.body.classList.toggle('online', on);
+  renderContextBar();
+}
+
+// ─── Drawer ───
+function openDrawer(){
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('backdrop').classList.add('show');
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('show');
+}
+
+// ─── Events ───
+document.getElementById('joystick').addEventListener('click', ()=> selectInput('JOY'));
+document.getElementById('menuBtn').addEventListener('click', openDrawer);
+document.getElementById('backdrop').addEventListener('click', closeDrawer);
+document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
+
+document.getElementById('connectBox').addEventListener('click', async ()=>{
+  if(!navigator.bluetooth || !window.isSecureContext){
+    toast('Web Bluetooth needs Chrome/Edge over HTTPS or localhost');
+    return;
+  }
+  if(ble.connected){ await ble.disconnect(); setConn(false,''); toast('Disconnected'); return; }
+  try{
+    const n = await ble.connect();
+    setConn(true, n);
+    toast('Connected to '+n);
+    await syncFromDevice();
+  }
+  catch(e){ if(e.name!=='NotFoundError') toast(e.message); }
+});
+
+// ─── Set active profile ───
+document.getElementById('ctxSetActive').addEventListener('click', ()=>{
+  liveId = currentId;
+  persistProfiles();
+  renderProfileGroups();
+  renderContextBar();
+  toast('"'+currentProfile().name+'" is now the active profile');
+  if(ble.connected){
+    ble.cmd({ cmd:'live', id:liveId }).catch(e=>toast('device sync error: '+e.message));
+  }
+});
+
+// ─── New profile form ───
+const npForm = document.getElementById('newProfileForm');
+const npName = document.getElementById('npName');
+const npGroup = document.getElementById('npGroup');
+const npNewGroup = document.getElementById('npNewGroup');
+function existingGroups(){
+  return [...new Set(profiles.map(p=>p.group).filter(g=>g))].sort((a,b)=>a.localeCompare(b));
+}
+function openNewProfileForm(){
+  if(!ble.connected){ toast('Connect your device to create profiles'); return; }
+  const groups = existingGroups();
+  npGroup.innerHTML = groups.map(g=>'<option value="'+escapeHtml(g)+'">'+escapeHtml(g)+'</option>').join('')
+                    + '<option value="">'+UNGROUPED+'</option>'
+                    + '<option value="__new__">+ New group…</option>';
+  const curGroup = currentProfile().group || '';
+  if([...npGroup.options].some(o=>o.value===curGroup)) npGroup.value = curGroup;
+  npNewGroup.style.display = npGroup.value === '__new__' ? '' : 'none';
+  npName.value = '';
+  npNewGroup.value = '';
+  npForm.style.display = 'flex';
+  document.getElementById('newProfileBtn').style.display = 'none';
+  npName.focus();
+}
+function closeNewProfileForm(){
+  npForm.style.display = 'none';
+  document.getElementById('newProfileBtn').style.display = '';
+}
+document.getElementById('newProfileBtn').addEventListener('click', openNewProfileForm);
+document.getElementById('npCancel').addEventListener('click', closeNewProfileForm);
+npGroup.addEventListener('change', ()=>{
+  npNewGroup.style.display = npGroup.value === '__new__' ? '' : 'none';
+  if(npGroup.value === '__new__') npNewGroup.focus();
+});
+npName.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('npCreate').click(); });
+npNewGroup.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('npCreate').click(); });
+document.getElementById('npCreate').addEventListener('click', ()=>{
+  const name = npName.value.trim();
+  if(!name){ toast('Enter a profile name'); npName.focus(); return; }
+  let group = npGroup.value;
+  if(group === '__new__'){
+    group = npNewGroup.value.trim();
+    if(!group){ toast('Enter a group name'); npNewGroup.focus(); return; }
+  }
+  const p = { id: makeProfileId(), name, group, bindings:{}, joystick:{mode:'analog'} };
+  profiles.push(p);
+  currentId = p.id;
+  loadCurrentIntoEditor();
+  expandedGroups.add(groupLabel(p));
+  persistProfiles();
+  closeNewProfileForm();
+  closeDrawer();
+  renderProfileGroups();
+  renderContextBar();
+  closeSheet();
+  render();
+  toast('Created "'+p.name+'"');
+  scheduleProfileSync();
+});
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(config(),null,2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (currentProfile().name || 'keymap').replace(/[^a-z0-9_-]+/gi,'_') + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ev=>{
+    try{
+      const d = JSON.parse(ev.target.result);
+      bind = normalizeBindings(d.bindings || {});
+      joy  = d.joystick || { mode:'analog' };
+      sel = null;
+      closeSheet();
+      render();
+      toast('Imported into "'+currentProfile().name+'"');
+      scheduleProfileSync();
+    }catch{ toast('Invalid keymap file'); }
+  };
+  r.readAsText(f); e.target.value='';
+});
+
+// ─── Init ───
+loadProfiles();
+loadCurrentIntoEditor();
+renderProfileGroups();
+renderContextBar();
+setConn(false,'');
+render();
+</script>
+</body>
+</html>

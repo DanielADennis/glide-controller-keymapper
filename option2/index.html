@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KeyMapper — ESP32-S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  :root{
+    --bg:#0a0a0c;--surf:#111114;--raise:#18181c;--brd:#2a2a30;--mut:#777;
+    --amber:#f59e0b;
+    --t-key:#10b981;--t-mouse:#3b82f6;--t-gamepad:#a855f7;--t-media:#f59e0b;--t-system:#ef4444;--t-macro:#06b6d4;
+  }
+  body{background:var(--bg);font-family:'IBM Plex Mono',ui-monospace,monospace;color:#eee}
+  .km{height:100%;display:flex;flex-direction:column}
+
+  /* ── Header ── */
+  .hdr{display:flex;align-items:center;gap:10px;padding:0 16px;height:52px;
+       border-bottom:1px solid var(--brd);background:var(--surf);flex-shrink:0}
+  .logo{font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);font-size:15px;white-space:nowrap}
+  .dot{width:9px;height:9px;border-radius:50%;background:#444;flex-shrink:0}
+  .dot.on{background:var(--t-key);box-shadow:0 0 8px var(--t-key)}
+  .name{font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+  .sp{flex:1}
+  .msg{font-size:11px;color:var(--t-key);white-space:nowrap}
+
+  /* ── Header buttons ── */
+  .b{display:inline-flex;align-items:center;justify-content:center;gap:5px;
+     min-height:36px;padding:0 14px;font:inherit;font-size:11px;font-weight:600;
+     letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--brd);
+     background:var(--raise);color:#eee;cursor:pointer;border-radius:7px;white-space:nowrap}
+  .b:hover{border-color:var(--amber);color:var(--amber)}
+  .b.acc{border-color:var(--amber);color:var(--amber)}
+  .b.acc:hover{background:var(--amber);color:var(--bg)}
+  .b.ok{border-color:var(--t-key);color:var(--t-key)}
+  .b.ok:hover{background:var(--t-key);color:var(--bg)}
+
+  /* ── Body layout ── */
+  .body{flex:1;display:flex;overflow:hidden;min-height:0}
+  .main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+        padding:24px;gap:18px;overflow:auto;min-width:0}
+  svg.dev{width:100%;max-width:640px;filter:drop-shadow(0 12px 36px rgba(0,0,0,.85))}
+
+  /* ── Legend ── */
+  .legend{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:10px;color:var(--mut);letter-spacing:.05em}
+  .lg{display:flex;align-items:center;gap:5px}
+  .sw{width:9px;height:9px;border-radius:2px}
+
+  /* ── Side panel ── */
+  .side{width:320px;border-left:1px solid var(--brd);background:var(--surf);
+        padding:20px;overflow-y:auto;flex-shrink:0}
+  .side-t{font-size:22px;font-weight:700;letter-spacing:.03em;color:var(--amber);text-transform:uppercase;line-height:1}
+  .side-s{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.12em;margin:4px 0 18px}
+  .fl{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:16px 0 7px}
+
+  /* ── Type / mode buttons ── */
+  .types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .typeb{min-height:40px;padding:10px 4px;border:1px solid var(--brd);background:var(--raise);
+         color:var(--mut);font:inherit;font-size:10px;font-weight:600;letter-spacing:.04em;
+         text-transform:uppercase;cursor:pointer;text-align:center;line-height:1.3}
+  .typeb:hover{color:#eee}
+  .typeb.active{color:var(--bg)}
+
+  /* ── Selects ── */
+  select{width:100%;background:var(--raise);border:1px solid var(--brd);color:#eee;
+         font:inherit;font-size:13px;padding:10px 12px;outline:none;appearance:none;min-height:44px}
+  select:focus{border-color:var(--amber)}
+
+  /* ── Macro ── */
+  .steps{display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin:6px 0 10px}
+  .schip{display:flex;align-items:center;gap:6px;padding:5px 10px;
+         background:var(--raise);border:1px solid var(--t-macro);font-size:12px;color:var(--t-macro)}
+  .schip .x{cursor:pointer;opacity:.6;font-size:14px;line-height:1}
+  .schip .x:hover{opacity:1}
+  .steprow{display:flex;gap:6px}
+  .steprow select{flex:1}
+  .stadd{min-height:44px;padding:0 14px;background:none;border:1px solid var(--t-macro);
+         color:var(--t-macro);font:inherit;font-size:11px;font-weight:600;
+         text-transform:uppercase;cursor:pointer;white-space:nowrap}
+  .stadd:hover{background:var(--t-macro);color:var(--bg)}
+
+  /* ── Misc ── */
+  .clear{width:100%;margin-top:18px;min-height:44px;background:none;border:1px solid var(--brd);
+         color:var(--mut);font:inherit;font-size:11px;text-transform:uppercase;
+         letter-spacing:.08em;cursor:pointer}
+  .clear:hover{border-color:var(--t-system);color:var(--t-system)}
+  .empty{color:#555;font-size:13px;text-align:center;margin-top:60px;line-height:1.9}
+  .hint{font-size:11px;color:#555;line-height:1.7;margin-top:12px}
+  .gi{cursor:pointer}
+
+  /* ── Mobile / Portrait — bigger everything ── */
+  @media (orientation: portrait), (max-width: 680px) {
+    .hdr{height:58px;padding:0 14px;gap:8px}
+    .logo{font-size:17px;letter-spacing:.1em}
+    .dot{width:10px;height:10px}
+    .msg{font-size:13px}
+    .b{min-height:44px;padding:0 16px;font-size:13px;border-radius:9px;gap:7px}
+    .b svg{width:13px;height:18px}
+
+    .body{flex-direction:column}
+    .main{flex:0 0 auto;padding:12px 10px;gap:10px;justify-content:flex-start;overflow:visible}
+    svg.dev{max-width:100%}
+
+    .legend{font-size:12px;gap:12px}
+    .sw{width:11px;height:11px;border-radius:3px}
+
+    .side{width:100%;border-left:none;border-top:1px solid var(--brd);
+          flex:1;overflow-y:auto;min-height:0;padding:18px 16px}
+    .side-t{font-size:28px}
+    .side-s{font-size:13px;margin:5px 0 20px;letter-spacing:.08em}
+    .fl{font-size:13px;letter-spacing:.07em;margin:18px 0 9px}
+
+    .types{grid-template-columns:repeat(2,1fr);gap:8px}
+    .typeb{min-height:52px;font-size:14px;padding:13px 6px;border-radius:4px}
+
+    select{font-size:16px;padding:14px;min-height:54px}
+
+    .steps{gap:8px;margin:8px 0 14px}
+    .schip{font-size:15px;padding:8px 13px;gap:8px}
+    .schip .x{font-size:18px}
+    .stadd{min-height:54px;padding:0 18px;font-size:14px}
+    .steprow{gap:8px}
+
+    .clear{min-height:54px;font-size:14px;margin-top:20px}
+    .hint{font-size:14px;line-height:1.8;margin-top:14px}
+    .empty{font-size:15px;margin-top:40px}
+  }
+</style>
+</head>
+<body>
+<div class="km">
+  <header class="hdr">
+    <span class="logo">KeyMapper</span>
+    <span class="dot" id="dot"></span>
+    <span class="name" id="devname">no device</span>
+    <span class="sp"></span>
+    <span class="msg" id="msg"></span>
+    <button class="b acc" id="exportBtn" title="Export config"><span class="ic">↓</span><span class="lbl"> export</span></button>
+    <button class="b" id="importBtn" title="Import config"><span class="ic">↑</span><span class="lbl"> import</span></button>
+    <input type="file" id="fileInput" accept=".json,application/json" style="display:none"/>
+    <button class="b ok" id="saveBtn" style="display:none" title="Save to device"><span class="ic">💾</span><span class="lbl"> save</span></button>
+    <button class="b" id="connBtn" title="Connect / Disconnect BLE"><svg width="12" height="17" viewBox="0 0 14 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><path d="M7 0L7 20 M7 0L12 5L7 10L12 15L7 20 M12 5L2 0 M12 15L2 20"/></svg><span class="lbl"> connect ble</span></button>
+  </header>
+  <div class="body">
+    <div class="main">
+      <div id="svgwrap"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <aside class="side" id="side"></aside>
+  </div>
+</div>
+
+<script>
+// ─── BLE UUIDs — match these in your ESP-IDF firmware ───
+const BLE_SVC = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const BLE_CFG = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+// ─── Binding categories ───
+const TYPES = [
+  { id:"key",     label:"Keyboard", color:"#10b981" },
+  { id:"mouse",   label:"Mouse",    color:"#3b82f6" },
+  { id:"gamepad", label:"Gamepad",  color:"#a855f7" },
+  { id:"media",   label:"Media",    color:"#f59e0b" },
+  { id:"system",  label:"System",   color:"#ef4444" },
+  { id:"macro",   label:"Macro",    color:"#06b6d4" },
+];
+const TYPE_COLOR = Object.fromEntries(TYPES.map(t=>[t.id,t.color]));
+
+const KEYS = [
+  "A","B","C","D","E","F","G","H","I","J","K","L","M",
+  "N","O","P","Q","R","S","T","U","V","W","X","Y","Z",
+  "1","2","3","4","5","6","7","8","9","0",
+  "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
+  "ENTER","SPACE","ESCAPE","TAB","BACKSPACE","DELETE",
+  "UP","DOWN","LEFT","RIGHT","HOME","END","PGUP","PGDN",
+];
+const MOUSE   = ["left_click","right_click","middle_click","scroll_up","scroll_down","button4","button5"];
+const GAMEPAD = ["A","B","X","Y","LB","RB","LT","RT","L3","R3","Start","Select","Home"];
+const MEDIA   = ["play_pause","stop","next","prev","vol_up","vol_down","mute"];
+const SYSTEM  = ["copy","paste","cut","undo","redo","save","select_all","find","screenshot","lock_screen"];
+
+const OPTIONS = { mouse:MOUSE, gamepad:GAMEPAD, media:MEDIA, system:SYSTEM };
+
+// ─── Physical layout — matches real hardware ───
+// Main cluster: 4-col columnar stagger (like the photo)
+// Thumb module: 5-way hat + 2 aux, shorter housing to the right
+// Trackpad: separate unit below (wooden frame + dark surface)
+function buildInputs(){
+  const arr = [];
+  const KW=52, KH=52, R=8;
+  const COL_X    = [40, 98, 156, 214];   // x per column
+  const STAGGER  = [18,  8,   0,  10];   // vertical offset per column (pinky lowest)
+  const BASE_Y   = 46;
+  const RSTRIDE  = 58;                   // row stride
+  const LABELS   = ["K1","K2","K3","K4","K5","K6","K7","K8","K9","K10","K11","K12"];
+  let n = 0;
+  for(let c=0;c<4;c++){
+    for(let r=0;r<3;r++){
+      arr.push({ id:LABELS[c*3+r], label:String(c*3+r+1),
+        x:COL_X[c], y:BASE_Y+STAGGER[c]+r*RSTRIDE, w:KW, h:KH, r:R, grp:"key" });
+    }
+  }
+  // 5-way hat — center at (350,140), callouts all rise upward to avoid horizontal spread
+  arr.push({ id:"HAT_U", label:"↑", x:339, y: 95, w:22, h:22, r:2, grp:"hat", callout:"up",   arc:{s:225,e:315} });
+  arr.push({ id:"HAT_L", label:"←", x:305, y:129, w:22, h:22, r:2, grp:"hat", callout:"up",   arc:{s:135,e:225} });
+  arr.push({ id:"HAT_C", label:"●", x:333, y:123, w:34, h:34, r:17, grp:"hat" });
+  arr.push({ id:"HAT_R", label:"→", x:373, y:129, w:22, h:22, r:2, grp:"hat", callout:"up",   arc:{s:315,e:45}  });
+  arr.push({ id:"HAT_D", label:"↓", x:339, y:163, w:22, h:22, r:2, grp:"hat", callout:"down", arc:{s:45, e:135} });
+  // Aux switches — minimised, hugging the hat
+  arr.push({ id:"S1", label:"S1", x:434, y: 86, w:52, h:52, r:8, grp:"aux" });
+  arr.push({ id:"S2", label:"S2", x:434, y:148, w:52, h:52, r:8, grp:"aux" });
+  return arr;
+}
+const INPUTS = buildInputs();
+// Trackpad — clickable area (inner dark surface)
+const JOY = { id:"JOY", x:30, y:300, w:238, h:168, r:16 };
+// Digital mode direction buttons — rendered on the trackpad surface
+const DIGITAL_INPUTS = [
+  { id:"JD_U", label:"↑", x:127, y:328, w:44, h:44, r:6, grp:"digital" },
+  { id:"JD_L", label:"←", x: 79, y:362, w:44, h:44, r:6, grp:"digital" },
+  { id:"JD_R", label:"→", x:175, y:362, w:44, h:44, r:6, grp:"digital" },
+  { id:"JD_D", label:"↓", x:127, y:396, w:44, h:44, r:6, grp:"digital" },
+];
+const JOY_MODES = [
+  { id:"analog",  label:"Analog"  },
+  { id:"digital", label:"Digital" },
+  { id:"mouse",   label:"Mouse"   },
+];
+
+// ─── State ───
+let bind = {};                 // { inputId: {type, ...} }
+let joy  = { mode:"mouse" };   // joystick config
+let sel  = null;               // selected input id ("JOY" for joystick)
+let editType = "key";          // active category tab
+
+// ─── BLE ───
+const ble = {
+  dev:null, char:null,
+  async connect(){
+    const dev = await navigator.bluetooth.requestDevice({ filters:[{ services:[BLE_SVC] }] });
+    const srv = await dev.gatt.connect();
+    const svc = await srv.getPrimaryService(BLE_SVC);
+    this.char = await svc.getCharacteristic(BLE_CFG);
+    this.dev = dev;
+    dev.addEventListener("gattserverdisconnected", ()=>{ this.dev=null; this.char=null; setConn(false,""); });
+    return dev.name || "Device";
+  },
+  async disconnect(){ this.dev && this.dev.gatt.disconnect(); this.dev=null; this.char=null; },
+  async write(obj){
+    if(!this.char) throw new Error("Not connected");
+    const buf = new TextEncoder().encode(JSON.stringify(obj));
+    for(let i=0;i<buf.length;i+=512) await this.char.writeValueWithResponse(buf.slice(i,i+512));
+  },
+  get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected); }
+};
+
+const config = () => ({ version:2, bindings:bind, joystick:joy });
+
+// ─── Short label shown on the layout ───
+function bindShort(b){
+  if(!b) return null;
+  switch(b.type){
+    case "key":     return b.key||"";
+    case "mouse":   return b.action||"";
+    case "gamepad": return b.button||"";
+    case "media":   return b.action||"";
+    case "system":  return b.action||"";
+    case "macro":   return ((b.steps||[]).length)+"k";
+    default: return null;
+  }
+}
+const trunc = (s,n)=> s && s.length>n ? s.slice(0,n)+"…" : s;
+
+// ─── Render: device ───
+function renderSVG(){
+  const p = [];
+  // viewBox: 550w × 490h — device body on top, trackpad below
+  p.push('<svg class="dev" viewBox="0 0 510 490">');
+  p.push('<defs>');
+  // Wood grain gradient for trackpad frame
+  p.push('<linearGradient id="woodGrad" x1="0" y1="0" x2="1" y2="1">');
+  p.push('<stop offset="0%" stop-color="#d4b483"/><stop offset="50%" stop-color="#c4a070"/><stop offset="100%" stop-color="#b8905a"/>');
+  p.push('</linearGradient>');
+  p.push('</defs>');
+
+  // ── Device body ─────────────────────────────────────────────────
+  // Main: x=20..278, y=14..234  |  Thumb: x=284..500, y=66..220
+  p.push('<path d="M 36,14 L 262,14 Q 274,14 278,26 L 284,66 L 484,66 Q 500,66 500,82 L 500,204 Q 500,220 484,220 L 284,220 L 278,228 Q 274,234 262,234 L 36,234 Q 20,234 20,218 L 20,30 Q 20,14 36,14 Z" fill="#2b2c30" stroke="#1a1a1e" stroke-width="1.5"/>');
+  p.push('<line x1="280" y1="66" x2="280" y2="220" stroke="#1e1f23" stroke-width="2"/>');
+  for(const [cx,cy] of [[36,30],[36,218],[484,82],[484,204]]){
+    p.push('<circle cx="'+cx+'" cy="'+cy+'" r="4" fill="#222226" stroke="#161618" stroke-width="1"/>');
+    p.push('<circle cx="'+cx+'" cy="'+cy+'" r="1.5" fill="#333"/>');
+  }
+
+  // ── Group labels ────────────────────────────────────────────────
+  p.push(grpLabel("KEYPAD", 42, 34));
+  p.push(grpLabel("AUX",    456, 78));
+
+
+  // Hat arc rendering helpers
+  const toR=d=>d*Math.PI/180, fv=n=>+n.toFixed(1);
+  const ptAt=(r,d)=>[350+r*Math.cos(toR(d)), 140+r*Math.sin(toR(d))];
+  const HAT_CENTERS={HAT_U:270,HAT_L:180,HAT_R:0,HAT_D:90};
+
+  // ── Keys ─────────────────────────────────────────────────────────
+  for(const inp of INPUTS){
+    const b=bind[inp.id], isSel=inp.id===sel;
+    const col=b?TYPE_COLOR[b.type]:null;
+    const fill=b?hexFade(col):"#1e1f23";
+    const stroke=isSel?"#f59e0b":(col||"#3a3b40");
+    const sw=isSel?2.5:1.5;
+    p.push('<g class="gi" data-id="'+inp.id+'">');
+
+    if(inp.arc){
+      // ── Arc section — filled annulus wedge, straight radial edges, connected ring ──
+      const {s:sa,e:ea}=inp.arc;
+      const R1=22, R2=36, Rm=29; // close to center; 14px wide sections
+      const [ix1,iy1]=ptAt(R1,sa),[ox1,oy1]=ptAt(R2,sa);
+      const [ox2,oy2]=ptAt(R2,ea),[ix2,iy2]=ptAt(R1,ea);
+      const lf=((ea-sa+360)%360)>180?1:0;
+      const d=`M${fv(ix1)},${fv(iy1)} L${fv(ox1)},${fv(oy1)} A${R2},${R2},0,${lf},1,${fv(ox2)},${fv(oy2)} L${fv(ix2)},${fv(iy2)} A${R1},${R1},0,${lf},0,${fv(ix1)},${fv(iy1)} Z`;
+      const fillCol=b?hexFade(col):"#1e1f23";
+      p.push('<path d="'+d+'" fill="'+fillCol+'" stroke="none"/>');
+      if(isSel) p.push('<path d="'+d+'" fill="none" stroke="#f59e0b" stroke-width="1.5" opacity="0.8"/>');
+      // Arrow label at arc midpoint
+      const ma=HAT_CENTERS[inp.id];
+      const [lx,ly]=[fv(350+Rm*Math.cos(toR(ma))),fv(140+Rm*Math.sin(toR(ma)))];
+      p.push(txt(lx,ly,inp.label,10,b?"#fff":"#888",700));
+      // Callout → diagonal corner bubble (no crossings: U=TR, R=BR, D=BL, L=TL)
+      if(b){
+        const short=trunc(bindShort(b),6);
+        if(short){
+          const bw=Math.max(short.length*5+14,30), bh=15;
+          const C={
+            HAT_U:{cx:410, cy:86,  ang:315, corner:'bl'}, // top-right
+            HAT_R:{cx:410, cy:194, ang:45,  corner:'tl'}, // bottom-right
+            HAT_D:{cx:302, cy:194, ang:135, corner:'tr'}, // bottom-left
+            HAT_L:{cx:302, cy:86,  ang:225, corner:'br'}, // top-left
+          }[inp.id];
+          if(C){
+            const bx=fv(C.cx-bw/2), by=fv(C.cy-bh/2);
+            const [ex,ey]=ptAt(R2,C.ang);
+            let tx,ty;
+            if(C.corner==='bl'){tx=C.cx-bw/2; ty=C.cy+bh/2;}
+            else if(C.corner==='tl'){tx=C.cx-bw/2; ty=C.cy-bh/2;}
+            else if(C.corner==='tr'){tx=C.cx+bw/2; ty=C.cy-bh/2;}
+            else {tx=C.cx+bw/2; ty=C.cy+bh/2;} // br
+            p.push('<line x1="'+fv(ex)+'" y1="'+fv(ey)+'" x2="'+fv(tx)+'" y2="'+fv(ty)+'" stroke="'+col+'" stroke-width="1.5" stroke-dasharray="3,2" stroke-linecap="round" opacity="0.7"/>');
+            p.push('<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="8" fill="#141416" stroke="'+col+'" stroke-width="0.9"/>');
+            p.push(txt(fv(C.cx),fv(C.cy),short,8,col,700));
+          }
+        }
+      }
+    } else {
+      // ── Regular key or HAT_C ────────────────────────────────────
+      const cx=inp.x+inp.w/2,cy=inp.y+inp.h/2;
+      if(isSel) p.push('<rect x="'+(inp.x-3)+'" y="'+(inp.y-3)+'" width="'+(inp.w+6)+'" height="'+(inp.h+6)+'" rx="'+(inp.r+3)+'" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.35"/>');
+      p.push(rect(inp.x,inp.y,inp.w,inp.h,inp.r,fill,stroke,sw));
+      if(inp.grp!=='hat'){
+        p.push('<rect x="'+(inp.x+3)+'" y="'+(inp.y+3)+'" width="'+(inp.w-6)+'" height="'+(inp.h-6)+'" rx="'+(Math.max(inp.r-3,2))+'" fill="none" stroke="'+(col||"#4a4b50")+'" stroke-width="0.8" opacity="0.5"/>');
+      }
+      const short=b?trunc(bindShort(b),8):null;
+      p.push(txt(cx,short?cy-7:cy,inp.label,11,"#e0e0e0",700));
+      if(short) p.push(txt(cx,cy+8,short,8,col,600));
+    }
+    p.push('</g>');
+    // After the last directional arc, draw ring borders + dividers on top of all arc fills
+    if(inp.id==='HAT_D'){
+      const R1h=22, R2h=36;
+      p.push('<circle cx="350" cy="140" r="'+R1h+'" fill="none" stroke="#3a3b40" stroke-width="0.8"/>');
+      p.push('<circle cx="350" cy="140" r="'+R2h+'" fill="none" stroke="#3a3b40" stroke-width="0.8"/>');
+      for(const ang of [45,135,225,315]){
+        const ix=fv(350+R1h*Math.cos(toR(ang))), iy=fv(140+R1h*Math.sin(toR(ang)));
+        const ox=fv(350+R2h*Math.cos(toR(ang))), oy=fv(140+R2h*Math.sin(toR(ang)));
+        p.push('<line x1="'+ix+'" y1="'+iy+'" x2="'+ox+'" y2="'+oy+'" stroke="#3a3b40" stroke-width="1.5"/>');
+      }
+    }
+  }
+  p.push('<rect x="16" y="286" width="266" height="198" rx="24" fill="url(#woodGrad)" stroke="#a07840" stroke-width="1.5"/>');
+  p.push('<rect x="'+JOY.x+'" y="'+JOY.y+'" width="'+JOY.w+'" height="'+JOY.h+'" rx="'+JOY.r+'" fill="#161618" stroke="#222" stroke-width="1"/>');
+  p.push(txt(JOY.x+JOY.w/2, 486, "TRACKPAD / JOYSTICK", 8, "#8a7050", 600));
+
+  // Trackpad clickable element (for mode config)
+  {
+    const isSel = sel==="JOY";
+    const jcx = JOY.x+JOY.w/2, jcy = JOY.y+JOY.h/2;
+    p.push('<g class="gi" data-id="JOY">');
+    if(isSel) p.push('<rect x="'+(JOY.x-3)+'" y="'+(JOY.y-3)+'" width="'+(JOY.w+6)+'" height="'+(JOY.h+6)+'" rx="'+(JOY.r+3)+'" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>');
+    p.push('<rect x="'+JOY.x+'" y="'+JOY.y+'" width="'+JOY.w+'" height="'+JOY.h+'" rx="'+JOY.r+'" fill="transparent"/>');
+    if(joy.mode !== "digital"){
+      p.push(txt(jcx, jcy, joy.mode.toUpperCase(), 11, isSel?"#f59e0b":"#383838", 700));
+    }
+    p.push('</g>');
+  }
+
+  // Digital mode: 4 bindable direction buttons appear on the trackpad surface
+  if(joy.mode === "digital"){
+    // Subtle crosshair guide lines
+    const jcx=JOY.x+JOY.w/2, jcy=JOY.y+JOY.h/2;
+    p.push('<line x1="'+jcx+'" y1="'+(JOY.y+10)+'" x2="'+jcx+'" y2="'+(JOY.y+JOY.h-10)+'" stroke="#222" stroke-width="1"/>');
+    p.push('<line x1="'+(JOY.x+10)+'" y1="'+jcy+'" x2="'+(JOY.x+JOY.w-10)+'" y2="'+jcy+'" stroke="#222" stroke-width="1"/>');
+    for(const inp of DIGITAL_INPUTS){
+      const b=bind[inp.id], isSel=inp.id===sel;
+      const col=b?TYPE_COLOR[b.type]:null;
+      const cx=inp.x+inp.w/2, cy=inp.y+inp.h/2;
+      const short=b?trunc(bindShort(b),8):null;
+      p.push('<g class="gi" data-id="'+inp.id+'">');
+      if(isSel) p.push('<rect x="'+(inp.x-3)+'" y="'+(inp.y-3)+'" width="'+(inp.w+6)+'" height="'+(inp.h+6)+'" rx="9" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>');
+      p.push(rect(inp.x,inp.y,inp.w,inp.h,inp.r, b?hexFade(col):"#202024", isSel?"#f59e0b":(col||"#38383e"), isSel?2:1.5));
+      p.push(txt(cx, short?cy-7:cy, inp.label, 13, "#aaa", 700));
+      if(short) p.push(txt(cx, cy+8, short, 8, col, 700));
+      p.push('</g>');
+    }
+  }
+
+  p.push('</svg>');
+  document.getElementById("svgwrap").innerHTML = p.join("");
+}
+function rect(x,y,w,h,r,fill,stroke,sw){ return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+r+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+sw+'"/>'; }
+function txt(x,y,s,size,fill,weight){ return '<text x="'+x+'" y="'+y+'" text-anchor="middle" dominant-baseline="middle" font-size="'+size+'" font-weight="'+(weight||400)+'" fill="'+fill+'" style="pointer-events:none">'+s+'</text>'; }
+function grpLabel(s,x,y){ return '<text x="'+x+'" y="'+y+'" font-size="9" font-weight="600" letter-spacing="2" fill="#3a3a42" style="pointer-events:none">'+s+'</text>'; }
+function hexFade(hex){ // dim a hex color for fill
+  const n = parseInt(hex.slice(1),16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  return 'rgba('+r+','+g+','+b+',0.14)';
+}
+
+// ─── Render: legend ───
+function renderLegend(){
+  document.getElementById("legend").innerHTML =
+    TYPES.map(t=>'<span class="lg"><span class="sw" style="background:'+t.color+'"></span>'+t.label+'</span>').join("");
+}
+
+// ─── Render: side panel ───
+function renderSide(){
+  const side = document.getElementById("side");
+  if(!sel){ side.innerHTML = '<div class="empty">Click any input<br/>to assign a binding</div>'; return; }
+
+  // Joystick panel
+  if(sel==="JOY"){
+    const hints = {
+      analog:  "Raw axis values sent as HID gamepad left stick.",
+      digital: "4 direction buttons appear on the pad — bind each independently below.",
+      mouse:   "Pad controls cursor movement.",
+    };
+    let modes = JOY_MODES.map(m=>{
+      const on = joy.mode===m.id;
+      return '<button class="typeb'+(on?' active':'')+'" data-jmode="'+m.id+'" style="'+(on?'background:#f59e0b;border-color:#f59e0b':'')+'">'+m.label+'</button>';
+    }).join("");
+    side.innerHTML =
+      '<div class="side-t">Trackpad</div><div class="side-s">palm rest · joystick</div>'+
+      '<label class="fl">Output Mode</label>'+
+      '<div class="types" style="grid-template-columns:repeat(3,1fr)">'+modes+'</div>'+
+      '<div class="hint">'+hints[joy.mode]+'</div>';
+    side.querySelectorAll("[data-jmode]").forEach(el=>el.addEventListener("click",()=>{
+      joy.mode = el.getAttribute("data-jmode"); renderSide(); renderSVG();
+    }));
+    return;
+  }
+
+  const inp = INPUTS.find(i=>i.id===sel) || DIGITAL_INPUTS.find(i=>i.id===sel);
+  const b = bind[sel];
+
+  // category tabs
+  const tabs = TYPES.map(t=>{
+    const on = editType===t.id;
+    return '<button class="typeb'+(on?' active':'')+'" data-type="'+t.id+'" style="'+(on?'background:'+t.color+';border-color:'+t.color:'')+'">'+t.label+'</button>';
+  }).join("");
+
+  side.innerHTML =
+    '<div class="side-t">'+inp.label+'</div><div class="side-s">'+sel+' · '+inp.grp+'</div>'+
+    '<label class="fl">Category</label>'+
+    '<div class="types">'+tabs+'</div>'+
+    '<div id="typeContent"></div>'+
+    '<button class="clear" id="clearBtn">Clear / Unbind</button>';
+
+  side.querySelectorAll("[data-type]").forEach(el=>el.addEventListener("click",()=>{
+    editType = el.getAttribute("data-type"); renderSide();
+  }));
+  document.getElementById("clearBtn").addEventListener("click",()=>{ delete bind[sel]; renderSide(); renderSVG(); });
+
+  renderTypeContent(b);
+}
+
+function renderTypeContent(b){
+  const host = document.getElementById("typeContent");
+  const cur = (b && b.type===editType) ? b : null;
+
+  if(editType==="key"){
+    const opts = '<option value="">— select key —</option>' +
+      KEYS.map(k=>'<option value="'+k+'"'+(cur&&cur.key===k?' selected':'')+'>'+k+'</option>').join("");
+    host.innerHTML = '<label class="fl">Key</label><select id="keySel">'+opts+'</select>';
+    document.getElementById("keySel").addEventListener("change", ()=>{
+      const key = document.getElementById("keySel").value;
+      if(key) bind[sel] = { type:"key", key };
+      else delete bind[sel];
+      renderSVG();
+    });
+    return;
+  }
+
+  if(editType==="macro"){
+    const steps = (cur && cur.steps) ? cur.steps : [];
+    const chips = steps.length
+      ? steps.map((k,i)=>'<span class="schip">'+k+'<span class="x" data-rm="'+i+'">✕</span></span>').join("")
+      : '<span style="font-size:10px;color:#444">empty — add keys below</span>';
+    const opts = '<option value="">add key…</option>'+KEYS.map(k=>'<option value="'+k+'">'+k+'</option>').join("");
+    host.innerHTML = '<label class="fl">Sequence (plays in order)</label>'+
+                     '<div class="steps">'+chips+'</div>'+
+                     '<div class="steprow"><select id="macroSel">'+opts+'</select>'+
+                     '<button class="stadd" id="macroAdd">+ add</button></div>';
+    const getSteps = ()=> (bind[sel] && bind[sel].type==="macro") ? bind[sel].steps.slice() : [];
+    document.getElementById("macroAdd").addEventListener("click",()=>{
+      const k = document.getElementById("macroSel").value; if(!k) return;
+      const s = getSteps(); s.push(k); bind[sel] = { type:"macro", steps:s };
+      renderTypeContent(bind[sel]); renderSVG();
+    });
+    host.querySelectorAll("[data-rm]").forEach(el=>el.addEventListener("click",()=>{
+      const s = getSteps(); s.splice(+el.getAttribute("data-rm"),1);
+      if(s.length) bind[sel] = { type:"macro", steps:s }; else delete bind[sel];
+      renderTypeContent(bind[sel]); renderSVG();
+    }));
+    return;
+  }
+
+  // single-select categories: mouse / gamepad / media / system
+  const list = OPTIONS[editType] || [];
+  const valKey = editType==="gamepad" ? "button" : "action";
+  const opts = '<option value="">— select —</option>'+
+    list.map(o=>'<option value="'+o+'"'+(cur&&cur[valKey]===o?' selected':'')+'>'+o+'</option>').join("");
+  host.innerHTML = '<label class="fl">'+TYPES.find(t=>t.id===editType).label+' action</label><select id="actSel">'+opts+'</select>';
+  document.getElementById("actSel").addEventListener("change",()=>{
+    const v = document.getElementById("actSel").value;
+    if(v){ const o={type:editType}; o[valKey]=v; bind[sel]=o; } else delete bind[sel];
+    renderSVG();
+  });
+}
+
+function render(){ renderSVG(); renderSide(); }
+
+// ─── Header helpers ───
+function setConn(on, name){
+  document.getElementById("dot").className = "dot"+(on?" on":"");
+  document.getElementById("devname").textContent = on ? (name||"Device") : "no device";
+  document.getElementById("connBtn").querySelector(".lbl").textContent = on ? " disconnect" : " connect ble";
+  document.getElementById("saveBtn").style.display = on ? "" : "none";
+}
+function setMsg(t){ document.getElementById("msg").textContent = t||""; }
+
+// ─── Events ───
+document.getElementById("svgwrap").addEventListener("click", e=>{
+  const g = e.target.closest("[data-id]"); if(!g) return;
+  sel = g.getAttribute("data-id");
+  editType = (sel!=="JOY" && bind[sel]) ? bind[sel].type : editType;
+  render();
+});
+document.getElementById("exportBtn").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(config(),null,2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "keymap.json"; a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("fileInput").click());
+document.getElementById("fileInput").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ev=>{ try{ const d=JSON.parse(ev.target.result); bind=d.bindings||{}; joy=d.joystick||{mode:"mouse"}; sel=null; render(); }catch{ alert("Invalid keymap.json"); } };
+  r.readAsText(f); e.target.value="";
+});
+document.getElementById("connBtn").addEventListener("click", async ()=>{
+  if(!navigator.bluetooth || !window.isSecureContext){
+    alert("Web Bluetooth needs Chrome/Edge over https (GitHub Pages) or http://localhost.\nExport/import work anywhere.");
+    return;
+  }
+  if(ble.connected){ await ble.disconnect(); setConn(false,""); return; }
+  try{ const n=await ble.connect(); setConn(true,n); }catch(e){ if(e.name!=="NotFoundError") alert(e.message); }
+});
+document.getElementById("saveBtn").addEventListener("click", async ()=>{
+  if(!ble.connected){ alert("Connect first."); return; }
+  setMsg("saving…");
+  try{ await ble.write(config()); setMsg("✓ saved"); setTimeout(()=>setMsg(""),2000); }catch(e){ setMsg("error"); alert(e.message); }
+});
+
+// ─── Init ───
+renderLegend();
+render();
+</script>
+</body>
+</html>
