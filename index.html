@@ -129,10 +129,15 @@
   .prowmore svg{width:16px;height:16px}
   /* Action strip / move form, revealed under the row they belong to */
   .pacts{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--brd);background:var(--surf)}
-  .pact{flex:1;min-height:36px;padding:0 4px;border:1px solid var(--brd);background:var(--bg);
-        color:#bbb;font:inherit;font-size:10px;font-weight:600;letter-spacing:.05em;
-        text-transform:uppercase;cursor:pointer;border-radius:6px}
+  /* Icon-only: four labelled buttons on one row truncated their own text on a
+     narrow drawer. The label lives in title/aria-label instead, so the action is
+     still announced and still shows on hover. */
+  .pact{flex:1;display:flex;align-items:center;justify-content:center;min-height:38px;
+        padding:0;border:1px solid var(--brd);background:var(--bg);
+        color:#bbb;cursor:pointer;border-radius:6px}
+  .pact svg{width:17px;height:17px;pointer-events:none}
   .pact:active{border-color:var(--amber);color:var(--amber)}
+  .pact.del{color:#8a6a6a}
   .pact.del:active{border-color:var(--t-system);color:var(--t-system)}
   .pmove{display:flex;flex-direction:column;gap:8px;padding:10px;border-top:1px solid var(--brd);
          background:var(--surf)}
@@ -714,7 +719,9 @@ const ble = {
   // Everything after device selection. Split out from connect() so the
   // auto-reconnect path can reuse it with a device handed back by
   // getDevices(), which needs no chooser and so no user gesture.
-  async attach(dev){
+  // `tries` is passed through to _openGatt: the auto-reconnect path asks for a
+  // single attempt so it can't sit on a device it may not be entitled to.
+  async attach(dev, tries=4){
     // Clear anything a previous attempt left on this same device object before
     // reconnecting, so its listener can't fire against the new connection.
     const hadLink = dev.gatt.connected;
@@ -723,7 +730,7 @@ const ble = {
     // disconnected", so let the release settle before asking for a new link.
     if(hadLink) await new Promise(r=>setTimeout(r,250));
 
-    const srv = await this._openGatt(dev);
+    const srv = await this._openGatt(dev, tries);
     let svc;
     try{
       svc = await srv.getPrimaryService(BLE_SVC);
@@ -1252,12 +1259,26 @@ function renderProfileGroups(){
             '</div>'+
           '</div>';
       } else if(rowMenu === p.id){
+        // Icon-only, so the label has to be carried by title + aria-label —
+        // without them the row would offer four unnamed buttons to a screen
+        // reader. The name is interpolated so each one is unambiguous when a
+        // list has several profiles open.
+        const act = (attr, label, svg, cls) =>
+          '<button class="pact'+(cls?' '+cls:'')+'" '+attr+'="'+p.id+'" '+
+                  'title="'+label+'" aria-label="'+label+' '+escapeHtml(p.name)+'">'+svg+'</button>';
+        const ico = d =>
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" '+
+               'stroke-linecap="round" stroke-linejoin="round">'+d+'</svg>';
         html +=
           '<div class="pacts">'+
-            '<button class="pact" data-rn="'+p.id+'">Rename…</button>'+
-            '<button class="pact" data-dup="'+p.id+'">Duplicate</button>'+
-            '<button class="pact" data-mv="'+p.id+'">Move…</button>'+
-            '<button class="pact del" data-del="'+p.id+'">Delete</button>'+
+            // pencil
+            act('data-rn','Rename', ico('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'))+
+            // overlapping sheets
+            act('data-dup','Duplicate', ico('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'))+
+            // folder with arrow
+            act('data-mv','Move', ico('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M11 14h6m-2.5-2.5L17 14l-2.5 2.5"/>'))+
+            // trash can
+            act('data-del','Delete', ico('<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/>'), 'del')+
           '</div>';
       }
       return html;
@@ -1835,6 +1856,9 @@ document.getElementById('connectBox').addEventListener('click', async ()=>{
     try{ localStorage.removeItem(LASTDEV_KEY); }catch{}
     setConn(false,''); toast('Disconnected'); return;
   }
+  // Let go of the device before opening the chooser: a pending auto-reconnect
+  // keeps the controller from advertising, so the chooser would come up empty.
+  cancelAutoReconnect();
   try{
     const n = await ble.connect();
     setConn(true, n);
@@ -1846,15 +1870,42 @@ document.getElementById('connectBox').addEventListener('click', async ()=>{
 });
 
 // ─── Auto-reconnect ───
-// getDevices() lists devices the user has already granted this origin access to,
+// getDevices() lists devices the user has already granted THIS ORIGIN access to,
 // so reconnecting to one needs no chooser and no user gesture. It is gated
 // behind chrome://flags/#enable-web-bluetooth-new-permissions-backend; where the
 // flag is off the method simply isn't there, and the user connects by hand as
 // before. Every failure here is silent — this runs unprompted at load, and a
 // controller that is switched off is the normal case, not an error worth a toast.
+//
+// Two things this must not do, both learned the hard way:
+//
+//  - It must not hoard the controller. gatt.connect() on a getDevices() device
+//    does not fail fast when the device is absent: Chrome keeps the request
+//    pending and connects the instant it advertises. A controller with a link
+//    open stops advertising, so a page quietly holding one makes the device
+//    invisible to every OTHER page's chooser — including the same app served
+//    from a different origin, which has its own separate permissions and so
+//    cannot see the device at all. Hence: one attempt, and release on failure.
+//
+//  - It must yield the moment the user reaches for the Connect button, rather
+//    than leaving them clicking at a chooser that cannot see a device this page
+//    is busy claiming.
+let autoConn = { dev:null, running:false };
+
+// Give up any in-flight auto-reconnect and let go of the device. Called before a
+// manual connect so the chooser sees a controller that is actually advertising.
+function cancelAutoReconnect(){
+  if(!autoConn.running) return;
+  autoConn.running = false;
+  // disconnect() is what cancels a *pending* connect, not just an open one.
+  try{ autoConn.dev && autoConn.dev.gatt.disconnect(); }catch{}
+  autoConn.dev = null;
+}
+
 async function tryAutoReconnect(){
   if(!navigator.bluetooth || !window.isSecureContext) return;
   if(!navigator.bluetooth.getDevices) return;
+  if(ble.connected) return;
   let wantId = null;
   try{ wantId = localStorage.getItem(LASTDEV_KEY); }catch{}
   if(!wantId) return;
@@ -1862,19 +1913,28 @@ async function tryAutoReconnect(){
   let dev = null;
   try{ dev = (await navigator.bluetooth.getDevices()).find(d=> d.id === wantId); }
   catch{ return; }
-  // Permission revoked, or a different browser profile — fall back to the button.
+  // Not granted on this origin, permission revoked, or a different browser
+  // profile — fall back to the button.
   if(!dev) return;
 
+  autoConn = { dev, running:true };
   try{
-    const n = await ble.attach(dev);
+    // tries:1 — the retry ladder exists for reconnecting right after a drop,
+    // where the controller is known to be there. Here it would just extend how
+    // long we sit on a device that may belong to another tab or origin.
+    const n = await ble.attach(dev, 1);
+    if(!autoConn.running) return;      // user took over while we were connecting
     setConn(true, n);
     toast('Reconnected to '+n);
     await syncFromDevice();
     maybeImportFromLink();
   }catch{
-    // Out of range or powered down. _openGatt has already retried; leaving the
-    // stored id in place means the next load tries again.
+    // Out of range, powered down, or held by another origin. Release rather than
+    // retry: the stored id means the next load tries again anyway.
+    try{ dev.gatt.disconnect(); }catch{}
     setConn(false,'');
+  }finally{
+    autoConn = { dev:null, running:false };
   }
 }
 
