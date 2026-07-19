@@ -29,10 +29,13 @@
   .logo{font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);font-size:15px;white-space:nowrap}
   .sp{flex:1}
 
-  .connwrap{display:flex;align-items:center;gap:8px}
+  /* min-width:0 all the way down so a long device name ellipsizes inside the
+     pill instead of pushing the connect button off the edge of the header. */
+  .connwrap{display:flex;align-items:center;gap:8px;min-width:0}
   .pill{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;
         background:var(--raise);border:1px solid var(--brd);font-size:11px;letter-spacing:.04em;
-        text-transform:uppercase;white-space:nowrap;color:var(--mut)}
+        text-transform:uppercase;white-space:nowrap;color:var(--mut);min-width:0}
+  .pill #connLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .pill .pdot{width:8px;height:8px;border-radius:50%;background:#444;flex-shrink:0}
   .pill.on{color:var(--t-key);border-color:var(--t-key)}
   .pill.on .pdot{background:var(--t-key);box-shadow:0 0 8px var(--t-key)}
@@ -119,13 +122,30 @@
   .prow .pbadge{font-size:8.5px;font-weight:700;letter-spacing:.09em;color:var(--t-key);
                 border:1px solid var(--t-key);border-radius:999px;padding:2px 7px;flex-shrink:0;
                 white-space:nowrap}
-  .prowdel{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
-           flex-shrink:0;background:none;border:none;border-radius:7px;color:#3a3a40;cursor:pointer;
-           margin:-6px -6px -6px 0}
-  .prowdel:active{background:rgba(239,68,68,.15);color:var(--t-system)}
-  .prowdel svg{width:15px;height:15px}
-  body:not(.online) .prowdel{display:none}
-  body:not(.online) #newProfileBtn{display:none !important}
+  .prowmore{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+            flex-shrink:0;background:none;border:none;border-radius:7px;color:#4a4a52;cursor:pointer;
+            margin:-6px -6px -6px 0}
+  .prowmore:active,.prowmore.on{background:var(--surf);color:var(--amber)}
+  .prowmore svg{width:16px;height:16px}
+  /* Action strip / move form, revealed under the row they belong to */
+  .pacts{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--brd);background:var(--surf)}
+  .pact{flex:1;min-height:36px;padding:0 4px;border:1px solid var(--brd);background:var(--bg);
+        color:#bbb;font:inherit;font-size:10px;font-weight:600;letter-spacing:.05em;
+        text-transform:uppercase;cursor:pointer;border-radius:6px}
+  .pact:active{border-color:var(--amber);color:var(--amber)}
+  .pact.del:active{border-color:var(--t-system);color:var(--t-system)}
+  .pmove{display:flex;flex-direction:column;gap:8px;padding:10px;border-top:1px solid var(--brd);
+         background:var(--surf)}
+  .pmove input[type=text]{width:100%;background:var(--bg);border:1px solid var(--brd);color:#eee;
+         font:inherit;font-size:13px;padding:11px 12px;outline:none;border-radius:8px;min-height:46px}
+  .pmove input[type=text]:focus{border-color:var(--amber)}
+  .pgempty{padding:12px 14px;border-top:1px solid var(--brd);font-size:11px;color:#555;text-align:center}
+  .pgdel{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex-shrink:0;
+         background:none;border:none;border-radius:6px;color:#4a4a52;cursor:pointer;font:inherit;
+         font-size:16px;line-height:1;margin:-4px -4px -4px 0}
+  .pgdel:active{background:rgba(239,68,68,.15);color:var(--t-system)}
+  body:not(.online) .prowmore,body:not(.online) .pgdel{display:none}
+  body:not(.online) #newProfileBtn,body:not(.online) #newGroupBtn{display:none !important}
   body:not(.online) .cell{cursor:default}
 
   /* ── New-profile inline form ── */
@@ -160,6 +180,14 @@
   .cell.live{outline:2px solid rgba(255,255,255,.9);
              box-shadow:inset 0 0 0 99px rgba(255,255,255,.18),0 0 14px rgba(255,255,255,.35);
              transform:scale(.94)}
+  /* Small dot marking a grid key's assigned LED color. Only grid keys have a
+     physical LED, so other cells never get one. */
+  .cell .ledsw{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;
+               box-shadow:0 0 4px rgba(0,0,0,.6);display:none}
+
+  .ledrow{display:flex;gap:10px;align-items:center;margin-bottom:4px}
+  input[type=color]{width:52px;height:46px;padding:2px;border:1px solid var(--brd);
+                     border-radius:8px;background:var(--raise);cursor:pointer;flex-shrink:0}
 
   .right{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap}
 
@@ -302,6 +330,21 @@
       <div class="s" id="devname">no device connected</div>
     </div>
     <div class="dsec">
+      <label class="dlabel">Device</label>
+      <button class="dbtn full" id="renameBtn">Rename controller</button>
+      <div class="npform" id="renameForm" style="display:none">
+        <!-- maxlength mirrors MAX_NAME_LEN in ble_config.c: the advertisement
+             has 26 bytes left for the name once flags and its header are paid
+             for, and the firmware rejects anything longer. -->
+        <input type="text" id="renameInput" placeholder="Controller name" maxlength="26"/>
+        <label class="fl">Shown in your Bluetooth device list after a fresh scan.</label>
+        <div class="row">
+          <button class="dbtn" id="renameCancel">Cancel</button>
+          <button class="dbtn acc" id="renameSave">Save</button>
+        </div>
+      </div>
+    </div>
+    <div class="dsec">
       <label class="dlabel">Profiles</label>
       <div id="profileGroups"></div>
       <div class="npform" id="newProfileForm" style="display:none">
@@ -314,8 +357,17 @@
           <button class="dbtn acc" id="npCreate">Create</button>
         </div>
       </div>
+      <div class="npform" id="newGroupForm" style="display:none">
+        <input type="text" id="ngName" placeholder="Group name" maxlength="30"/>
+        <label class="fl">A group is just a label for organising profiles. It starts empty — create or move a profile into it.</label>
+        <div class="row">
+          <button class="dbtn" id="ngCancel">Cancel</button>
+          <button class="dbtn acc" id="ngCreate">Create</button>
+        </div>
+      </div>
       <div class="row">
-        <button class="dbtn full" id="newProfileBtn">+ New profile</button>
+        <button class="dbtn" id="newProfileBtn">+ Profile</button>
+        <button class="dbtn" id="newGroupBtn">+ Group</button>
       </div>
     </div>
     <div class="dsec">
@@ -326,6 +378,13 @@
       </div>
       <input type="file" id="fileInput" accept=".json,application/json" style="display:none"/>
       <div class="dhint">Bindings save to the device automatically as you edit. Export/import are just for moving a profile to or from a JSON file.</div>
+    </div>
+    <div class="dsec">
+      <label class="dlabel">Share</label>
+      <div class="row">
+        <button class="dbtn full" id="shareLinkBtn">↗ Copy share link</button>
+      </div>
+      <div class="dhint">Copies a link with this profile's bindings baked in. Opening it on another device imports it as a new profile.</div>
     </div>
   </nav>
 
@@ -380,6 +439,9 @@ const KEYS = [
   "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
   "ENTER","SPACE","ESCAPE","TAB","BACKSPACE","DELETE",
   "UP","DOWN","LEFT","RIGHT","HOME","END","PGUP","PGDN",
+  // Lock/system keys. Ordinary keycodes, not modifiers — CAPS_LOCK toggles on
+  // press rather than staying on while held. Must match KEY_TABLE in keycodes.c.
+  "CAPS_LOCK","INSERT","PRTSC","SCROLL_LOCK","NUM_LOCK","PAUSE","MENU",
 ];
 const MOUSE   = ["left_click","right_click","middle_click","scroll_up","scroll_down","button4","button5"];
 const GAMEPAD = ["A","B","X","Y","LB","RB","LT","RT","L3","R3","Start","Select","Home"];
@@ -399,10 +461,47 @@ const STEP_TYPES = ["key","mouse","gamepad","media","system","delay"];
 // What a press does while the same macro is still playing. Omitting the field
 // means "restart", so v4 profiles written before it existed still mean the same.
 const RETRIGGER_MODES = [["restart","restart it"],["ignore","let it finish"]];
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
+
+// v5 renamed the inputs from K1..K12/S1/S2 to finger-and-position names, and
+// corrected a pin table that had every key filed under the wrong name. The map
+// is by *physical key*, not by label, so an old binding keeps firing on the key
+// the user actually pressed — it just has the right name now. The hat was
+// rotated as well: the contact labelled HAT_U was physically down.
+const LEGACY_INPUT_IDS = {
+  K1:"P1",  K2:"P2",  K3:"P3",
+  K10:"R1", K9:"R2",  K8:"R3",
+  K11:"M1", K12:"M2", S1:"M3",
+  K5:"I1",  K4:"I2",  S2:"I3",
+  K6:"T1",  K7:"T2",
+  HAT_U:"HAT_D", HAT_D:"HAT_C", HAT_C:"HAT_U",
+};
+// Rewrite one input->value map (bindings or leds) to current names. A key that
+// is already current is left alone and wins over a legacy alias for the same
+// input, so re-running this is harmless.
+function migrateInputIds(map){
+  if(!map || typeof map !== "object") return map || {};
+  const out = {};
+  Object.keys(map).forEach(k=>{
+    const id = LEGACY_INPUT_IDS[k] || k;
+    if(!(id in out) || k === id) out[id] = map[k];
+  });
+  return out;
+}
+function migrateProfile(p){
+  if(!p || typeof p !== "object") return p;
+  p.bindings = migrateInputIds(p.bindings);
+  p.leds     = migrateInputIds(p.leds);
+  return p;
+}
 
 // ─── Physical inputs (laid out like a mobile macropad) ───
-const GRID_KEYS = [1,2,3,4,5,6,7,8,9,10,11,12].map(n=>({ id:"K"+n, label:String(n), grp:"key" }));
+// Inputs are named by finger and position: P=pinky, R=ring, M=middle, I=index,
+// T=thumb, numbered 1..3 outward from the palm. The grid is 4 columns × 3 rows
+// with one column per finger and fills row-wise, so this list runs across each
+// row — P1,R1,M1,I1 then P2,R2,M2,I2 then P3,R3,M3,I3.
+const FINGERS = ["P","R","M","I"];
+const GRID_KEYS = [1,2,3].flatMap(n=> FINGERS.map(f=>({ id:f+n, label:f+n, grp:"key" })));
 const HAT = [
   { id:"HAT_U", label:"↑", grp:"hat" },
   { id:"HAT_L", label:"←", grp:"hat" },
@@ -411,8 +510,8 @@ const HAT = [
   { id:"HAT_D", label:"↓", grp:"hat" },
 ];
 const THUMB = [
-  { id:"S1", label:"S1", grp:"aux" },
-  { id:"S2", label:"S2", grp:"aux" },
+  { id:"T1", label:"T1", grp:"aux" },
+  { id:"T2", label:"T2", grp:"aux" },
 ];
 const DIGITAL_INPUTS = [
   { id:"JD_U", label:"↑", grp:"digital", cls:"u" },
@@ -431,10 +530,13 @@ const JOY_MODES = [
 // input. It sends bit positions, not names, so this order must stay identical to
 // INPUT_IDS[] in the firmware's config.c — reordering either side silently lights
 // up the wrong key rather than failing.
+// Bit positions in the live-input bitmap. The wire carries positions, not
+// names, so this MUST stay in lockstep with input_id_t in the firmware's
+// config.h — reordering one side without the other silently mismaps every
+// input instead of failing loudly.
 const LIVE_INPUT_ORDER = [
-  "K1","K2","K3","K4","K5","K6","K7","K8","K9","K10","K11","K12",
+  "P1","P2","P3","R1","R2","R3","M1","M2","M3","I1","I2","I3","T1","T2",
   "HAT_U","HAT_D","HAT_L","HAT_R","HAT_C",
-  "S1","S2",
   "JD_U","JD_D","JD_L","JD_R",
 ];
 let liveBits = 0;
@@ -462,6 +564,7 @@ const JOY_HINTS = {
 // ─── State ───
 let bind = {};                 // { inputId: {type, ...} }
 let joy  = { mode:"analog" };  // joystick config
+let led  = {};                 // { inputId: "#rrggbb" } — grid keys (K1..K12) only
 let sel  = null;               // selected input id ("JOY" for joystick)
 let editType = "key";          // active category tab in sheet
 
@@ -473,28 +576,49 @@ let editType = "key";          // active category tab in sheet
 const PROFILES_KEY = "keymapper.profiles";
 const CURRENT_KEY  = "keymapper.current";
 const LIVE_KEY     = "keymapper.live";
+// Groups are just a string on each profile, so a group with nothing in it has
+// nowhere to live on the device. This key holds those empty ones locally, which
+// is what lets you create a group up front and fill it later. A name here that
+// also has profiles is harmless — rendering unions the two.
+const GROUPS_KEY   = "keymapper.groups";
+// BluetoothDevice.id of the last controller we connected to, so a reload can go
+// straight back to it instead of putting the chooser up again.
+const LASTDEV_KEY  = "keymapper.lastDevice";
 const UNGROUPED    = "Ungrouped";
 let profiles = [];
 let currentId = null;
 let liveId = null;
+let extraGroups = [];
 let expandedGroups = new Set();
+// Profile ids whose inline action strip / move form is open in the drawer.
+let rowMenu = null;
+let rowMove = null;
+let rowRename = null;
+// A profile decoded from a share link, waiting on a device connection before
+// it's safe to create (see maybeImportFromLink).
+let pendingImportPayload = null;
 
 function loadProfiles(){
   try{ profiles = JSON.parse(localStorage.getItem(PROFILES_KEY)) || []; }catch{ profiles = []; }
+  // Anything stored before the v5 input rename still uses K*/S* names.
+  profiles.forEach(migrateProfile);
   if(!profiles.length){
-    profiles = [{ id:"default", name:"Default", group:"", bindings:{}, joystick:{mode:"analog"} }];
+    profiles = [{ id:"default", name:"Default", group:"", bindings:{}, joystick:{mode:"analog"}, leds:{} }];
   }
-  profiles.forEach(p=>{ if(p.group==null) p.group = ""; normalizeBindings(p.bindings); });
+  profiles.forEach(p=>{ if(p.group==null) p.group = ""; normalizeBindings(p.bindings); p.leds = normalizeLeds(p.leds); });
   currentId = localStorage.getItem(CURRENT_KEY);
   if(!profiles.find(p=>p.id===currentId)) currentId = profiles[0].id;
   liveId = localStorage.getItem(LIVE_KEY);
   if(!profiles.find(p=>p.id===liveId)) liveId = currentId;
+  try{ extraGroups = JSON.parse(localStorage.getItem(GROUPS_KEY)) || []; }catch{ extraGroups = []; }
+  if(!Array.isArray(extraGroups)) extraGroups = [];
   expandedGroups.add(groupLabel(currentProfile()));
 }
 function persistProfiles(){
   localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
   localStorage.setItem(CURRENT_KEY, currentId);
   localStorage.setItem(LIVE_KEY, liveId);
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(extraGroups));
 }
 function currentProfile(){ return profiles.find(p=>p.id===currentId); }
 function liveProfile(){ return profiles.find(p=>p.id===liveId); }
@@ -508,6 +632,7 @@ function loadCurrentIntoEditor(){
   const p = currentProfile();
   bind = JSON.parse(JSON.stringify(p.bindings||{}));
   joy  = JSON.parse(JSON.stringify(p.joystick||{mode:"analog"}));
+  led  = JSON.parse(JSON.stringify(p.leds||{}));
   sel = null;
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -535,45 +660,135 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<
 //
 // A second characteristic (BLE_IN) notifies a 4-byte LE uint32 bitmap of which
 // inputs are physically held, for the live mirror. See BLE_PROTOCOL.md.
+// Raw bytes per chunk. Must match CHUNK_RAW in the firmware's ble_config.c:
+// the two sides agree on the window size so a `put` chunk always fits in one
+// ATT operation once base64 has expanded it by 4/3.
+const CHUNK_RAW = 288;
+// The payload is UTF-8 JSON, so it round-trips as bytes and is only decoded to
+// text once the whole profile is reassembled — decoding per chunk would split
+// multi-byte characters across window boundaries.
+const b64ToBytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const bytesToB64 = b => btoa(String.fromCharCode(...b));
+
 const ble = {
   dev:null, char:null, inChar:null,
+  // Kept so the listener can be removed again: Chrome hands back the *same*
+  // BluetoothDevice object for a device it has already seen this page session,
+  // so re-adding on every connect stacks listeners on one object. A stale one
+  // firing late tears down the connection that just succeeded.
+  _onDrop:null,
+  // Web Bluetooth allows exactly one outstanding GATT operation per device;
+  // starting a second while one is in flight throws "GATT operation already in
+  // progress" and can leave the firmware's long-write reassembly half-fed,
+  // which drops the link. The debounced `put`, the connect-time ls/get sweep,
+  // and the del/live commands all reach for the characteristic independently,
+  // so every operation goes through this one chain instead of racing.
+  _gatt: Promise.resolve(),
+  // fn runs on both settle paths: a failed operation must not stall the queue.
+  _serialize(fn){
+    const run = this._gatt.then(fn, fn);
+    this._gatt = run.catch(()=>{});
+    return run;
+  },
+  // Drop every reference to the current link. Nulling our own fields is not
+  // enough: Chrome holds the device "in use" until gatt.disconnect() is called,
+  // even when the link has already dropped on its own. While it does, the
+  // firmware never sees a clean disconnect, so it never restarts advertising
+  // and the next chooser can't find the controller — the state a hard refresh
+  // was clearing by hand.
+  _teardown(also){
+    for(const d of new Set([this.dev, also].filter(Boolean))){
+      if(this._onDrop) d.removeEventListener("gattserverdisconnected", this._onDrop);
+      try{ d.gatt.disconnect(); }catch(e){}
+    }
+    this._onDrop=null; this.dev=null; this.char=null; this.inChar=null;
+    // A fresh queue per connection: an operation stranded by a dropped link
+    // must not chain onto — or delay — the next connection's commands.
+    this._gatt = Promise.resolve();
+    applyLiveInputs(0);   // don't leave keys lit from a device that's gone
+  },
   async connect(){
     const dev = await navigator.bluetooth.requestDevice({ filters:[{ services:[BLE_SVC] }] });
-    const srv = await dev.gatt.connect();
-    const svc = await srv.getPrimaryService(BLE_SVC);
-    this.char = await svc.getCharacteristic(BLE_CFG);
+    return this.attach(dev);
+  },
+  // Everything after device selection. Split out from connect() so the
+  // auto-reconnect path can reuse it with a device handed back by
+  // getDevices(), which needs no chooser and so no user gesture.
+  async attach(dev){
+    // Clear anything a previous attempt left on this same device object before
+    // reconnecting, so its listener can't fire against the new connection.
+    const hadLink = dev.gatt.connected;
+    this._teardown(dev);
+    // Connecting into a half-torn-down GATT is what surfaces as "GATT Server is
+    // disconnected", so let the release settle before asking for a new link.
+    if(hadLink) await new Promise(r=>setTimeout(r,250));
+
+    const srv = await this._openGatt(dev);
+    let svc;
+    try{
+      svc = await srv.getPrimaryService(BLE_SVC);
+      this.char = await svc.getCharacteristic(BLE_CFG);
+    }catch(err){
+      // Discovery failed on an open link. Releasing it here is what lets the
+      // firmware advertise again; leaving it is what made the retry invisible
+      // to the chooser.
+      this._teardown(dev);
+      throw err;
+    }
     this.dev = dev;
-    dev.addEventListener("gattserverdisconnected", ()=>{
-      this.dev=null; this.char=null; this.inChar=null;
-      applyLiveInputs(0);   // don't leave keys lit from a device that's gone
-      setConn(false,"");
-    });
+    this._onDrop = ()=>{ this._teardown(); setConn(false,""); };
+    dev.addEventListener("gattserverdisconnected", this._onDrop);
     await this.watchInputs(svc);
+    // Remembered here rather than at the call sites so both the chooser path and
+    // the auto-reconnect path record it, and only once the link is actually up.
+    try{ localStorage.setItem(LASTDEV_KEY, dev.id); }catch{}
     return dev.name || "Device";
+  },
+  // gatt.connect() routinely fails on the first try just after a drop: the
+  // controller may still be tearing down its own side and restarting
+  // advertising. Retrying here is what clicking Connect three or four times
+  // was doing manually.
+  async _openGatt(dev, tries=4){
+    for(let i=0;;i++){
+      try{ return await dev.gatt.connect(); }
+      catch(err){
+        if(i>=tries-1) throw err;
+        try{ dev.gatt.disconnect(); }catch(e){}
+        await new Promise(r=>setTimeout(r, 300*(i+1)));
+      }
+    }
   },
   // Subscribe to the live input mirror. Firmware without the characteristic is
   // still perfectly usable for editing, so this must not fail the connection.
+  // Queued like any command: `connected` is already true by the time this runs,
+  // so a debounced `put` can otherwise land between the read and the subscribe.
   async watchInputs(svc){
-    try{
-      const ch = await svc.getCharacteristic(BLE_IN);
-      // Read first, then subscribe: the device pushes current state on subscribe,
-      // so a slower read can't land after a fresher notify and undo it.
-      applyLiveInputs(decodeInputs(await ch.readValue()));
-      ch.addEventListener('characteristicvaluechanged',
-                          e=> applyLiveInputs(decodeInputs(e.target.value)));
-      await ch.startNotifications();
-      this.inChar = ch;
-    }catch(err){
-      this.inChar = null;
-      console.warn('live input mirror unavailable:', err.message);
-    }
+    return this._serialize(async ()=>{
+      try{
+        const ch = await svc.getCharacteristic(BLE_IN);
+        // Read first, then subscribe: the device pushes current state on subscribe,
+        // so a slower read can't land after a fresher notify and undo it.
+        applyLiveInputs(decodeInputs(await ch.readValue()));
+        ch.addEventListener('characteristicvaluechanged',
+                            e=> applyLiveInputs(decodeInputs(e.target.value)));
+        await ch.startNotifications();
+        this.inChar = ch;
+      }catch(err){
+        this.inChar = null;
+        console.warn('live input mirror unavailable:', err.message);
+      }
+    });
   },
   async disconnect(){
-    this.dev && this.dev.gatt.disconnect();
-    this.dev=null; this.char=null; this.inChar=null;
-    applyLiveInputs(0);
+    this._teardown();
   },
-  async cmd(obj){
+  // One write/read round trip, with no serialization of its own. Everything
+  // reaches this through cmd/readProfile/writeProfile, which own the queue —
+  // calling it outside a _serialize body would let two transfers interleave.
+  async _rawCmd(obj){
+    // The connected check lives inside the serialized body, not outside it: a
+    // command can sit in the queue while the device drops, and writing to a
+    // stale characteristic throws a far less obvious error than this.
     if(!this.char) throw new Error("Not connected");
     const buf = new TextEncoder().encode(JSON.stringify(obj));
     await this.char.writeValueWithResponse(buf);
@@ -584,10 +799,53 @@ const ble = {
     if(resp && resp.error) throw new Error(resp.error);
     return resp;
   },
+  async cmd(obj){ return this._serialize(()=> this._rawCmd(obj)); },
+
+  // ── Chunked profile transfer ──
+  // A BLE attribute value can never exceed 512 bytes (an ATT spec limit that no
+  // MTU or long read/write lifts), and profiles are 1.5-2 KB. So a profile moves
+  // as a series of base64 windows of its raw JSON text — see BLE_PROTOCOL.md.
+  //
+  // Each transfer runs its whole chunk loop inside ONE _serialize body. The
+  // firmware tracks a single in-flight transfer and rejects any chunk that
+  // doesn't continue it, so an unrelated command landing between two chunks
+  // would abort the transfer with "out of sequence".
+  async readProfile(id){
+    return this._serialize(async ()=>{
+      const parts = [];
+      let off = 0, total = null, got = 0;
+      do {
+        const r = await this._rawCmd({ cmd:'get', id, off });
+        total = r.total;
+        const bytes = b64ToBytes(r.data);
+        // Without this a firmware that keeps answering with an empty window
+        // would spin here forever instead of failing the read.
+        if(!bytes.length && got < total) throw new Error('empty chunk at '+off);
+        parts.push(bytes);
+        got += bytes.length;
+        off  = got;
+      } while(got < total);
+      const joined = new Uint8Array(got);
+      let at = 0;
+      for(const p of parts){ joined.set(p, at); at += p.length; }
+      return JSON.parse(new TextDecoder().decode(joined));
+    });
+  },
+  async writeProfile(p){
+    const bytes = new TextEncoder().encode(JSON.stringify(p));
+    const total = bytes.length;
+    if(!total) throw new Error('empty profile');
+    return this._serialize(async ()=>{
+      for(let off = 0; off < total; off += CHUNK_RAW){
+        const slice = bytes.subarray(off, Math.min(off + CHUNK_RAW, total));
+        await this._rawCmd({ cmd:'put', id:p.id, off, total, data: bytesToB64(slice) });
+      }
+    });
+  },
   get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected); }
 };
 
-const config = () => ({ version:SCHEMA_VERSION, name:currentProfile().name, group:currentProfile().group, bindings:bind, joystick:joy });
+const config = () => ({ version:SCHEMA_VERSION, name:currentProfile().name, group:currentProfile().group, bindings:bind, joystick:joy, leds:led });
 
 // ─── Keep the device in sync with whatever's loaded ───
 // Binding/joystick edits are debounced into a single `put` for the one changed
@@ -599,6 +857,7 @@ function scheduleProfileSync(){
   if(p){
     p.bindings = JSON.parse(JSON.stringify(bind));
     p.joystick = JSON.parse(JSON.stringify(joy));
+    p.leds     = JSON.parse(JSON.stringify(led));
     syncPendingId = p.id;
   }
   persistProfiles();
@@ -612,19 +871,36 @@ async function syncToDevice(){
   const p = profiles.find(x=>x.id===id);
   if(!p) return;
   try{
-    await ble.cmd({ cmd:'put', profile:{ version:SCHEMA_VERSION, ...p } });
+    await ble.writeProfile({ version:SCHEMA_VERSION, ...p });
     toast('✓ synced to device');
+  }catch(e){ toast('sync error: '+e.message); }
+}
+// Push one specific profile now, rather than the debounced "whatever's in the
+// editor" path above. Used by move/duplicate, which change a profile that isn't
+// necessarily the one loaded.
+async function putProfile(p, okMsg){
+  if(!ble.connected) return;
+  try{
+    await ble.writeProfile({ version:SCHEMA_VERSION, ...p });
+    if(okMsg) toast(okMsg);
   }catch(e){ toast('sync error: '+e.message); }
 }
 async function syncFromDevice(){
   try{
-    const { ids, liveId:devLiveId } = await ble.cmd({ cmd:'ls' });
+    const { ids, liveId:devLiveId, name } = await ble.cmd({ cmd:'ls' });
+    // Ahead of the early returns below: the advertised name the chooser gave us
+    // is whatever was cached at scan time, so a device renamed since then is
+    // still listed under its old name. This is the authoritative one, and it
+    // arrives even from a device holding no profiles yet.
+    if(name) setConn(true, name);
     if(!ids || !ids.length) return;
     const loaded = [];
     for(const id of ids){
       try{
-        const p = await ble.cmd({ cmd:'get', id });
-        if(p && p.id){ if(p.group==null) p.group=''; normalizeBindings(p.bindings); loaded.push(p); }
+        const p = await ble.readProfile(id);
+        // Migrate before normalizing: a device still holding pre-v5 profiles
+        // would otherwise hand back names normalizeLeds/normalizeBindings drop.
+        if(p && p.id){ if(p.group==null) p.group=''; migrateProfile(p); normalizeBindings(p.bindings); p.leds = normalizeLeds(p.leds); loaded.push(p); }
       }catch{}
     }
     if(!loaded.length) return;
@@ -680,6 +956,68 @@ function normalizeBindings(bindings){
   });
   return bindings || {};
 }
+// The strip has one pixel per key — all 12 grid keys plus both thumb keys, per
+// LED_PIXEL_INPUT in pinmap.h. The hat and joystick have none. Only well-formed
+// "#rrggbb" is usable; drop anything else rather than sending the firmware a
+// color it will reject key-by-key anyway.
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+const LED_INPUTS = [...GRID_KEYS, ...THUMB];
+function normalizeLeds(leds){
+  const out = {};
+  LED_INPUTS.forEach(({id})=>{
+    const v = leds && leds[id];
+    if(typeof v === "string" && HEX_COLOR_RE.test(v)) out[id] = v.toLowerCase();
+  });
+  return out;
+}
+// ─── Share links ───
+// A profile round-trips through the URL hash as deflate-compressed, base64url
+// JSON. Hash (not a query param) so the payload never reaches a server or
+// access log — GitHub Pages is static, but this also means it works offline.
+function bytesToBase64Url(bytes){
+  let bin = '';
+  bytes.forEach(b=> bin += String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function base64UrlToBytes(str){
+  str = str.replace(/-/g,'+').replace(/_/g,'/');
+  while(str.length % 4) str += '=';
+  const bin = atob(str);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+async function compressToBytes(text){
+  const cs = new CompressionStream('deflate-raw');
+  const writer = cs.writable.getWriter();
+  writer.write(new TextEncoder().encode(text));
+  writer.close();
+  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+}
+async function decompressToText(bytes){
+  const ds = new DecompressionStream('deflate-raw');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());
+}
+async function buildShareLink(){
+  const bytes = await compressToBytes(JSON.stringify(config()));
+  return location.origin + location.pathname + '#p=' + bytesToBase64Url(bytes);
+}
+// Reads and immediately strips `#p=...` from the URL so a refresh or the
+// back button can't re-trigger the import and the payload doesn't linger
+// in history. Returns the decoded profile object, or null if there's nothing
+// (or nothing valid) to import.
+async function consumeShareHash(){
+  const m = /(?:^#|[#&])p=([^&]+)/.exec(location.hash);
+  if(!m) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  try{
+    const payload = JSON.parse(await decompressToText(base64UrlToBytes(m[1])));
+    return (payload && typeof payload === 'object') ? payload : null;
+  }catch{ toast('Invalid share link'); return null; }
+}
 // "⌃⇧C" — modifiers as glyphs, then the keys held with them.
 function chordLabel(mods, keys){
   return (mods||[]).map(m=>MOD_GLYPH[m] || m+"+").join("") + (keys||[]).join("+");
@@ -729,6 +1067,11 @@ function makeCell(inp, extraClass){
   lab.className = 'lab';
   lab.textContent = inp.label;
   el.appendChild(lab);
+  if(inp.grp === 'key'){
+    const sw = document.createElement('span');
+    sw.className = 'ledsw';
+    el.appendChild(sw);
+  }
   el.addEventListener('click', e=>{ e.stopPropagation(); selectInput(inp.id); });
   return el;
 }
@@ -753,6 +1096,11 @@ function paintCell(el, id){
     el.style.borderColor = sel===id ? 'var(--amber)' : '';
     el.querySelector('.lab').style.color = '';
     if(sub) sub.remove();
+  }
+  const sw = el.querySelector('.ledsw');
+  if(sw){
+    if(led[id]){ sw.style.background = led[id]; sw.style.display = ''; }
+    else sw.style.display = 'none';
   }
 }
 
@@ -815,6 +1163,14 @@ function renderLegend(){
     TYPES.map(t=>'<span class="lg"><span class="sw" style="background:'+t.color+'"></span>'+t.label+'</span>').join("");
 }
 
+// "Group:Name" for a grouped profile, bare name for an ungrouped one — the
+// same profile name can appear in several groups, so the group is what tells
+// them apart at a glance.
+function qualifiedName(p){
+  if(!p) return '—';
+  return p.group ? p.group + ':' + p.name : p.name;
+}
+
 // ─── Render: active-profile context bar ──
 // Always shows what's currently loaded. Green = it's also the live/device
 // profile; amber = you're editing something other than the live profile, and
@@ -825,17 +1181,33 @@ function renderContextBar(){
   const isLive = currentId === liveId;
   document.getElementById('ctxBar').classList.toggle('editing', !isLive);
   document.getElementById('ctxLabel').textContent = isLive ? 'Active profile' : 'Editing';
-  document.getElementById('ctxName').textContent = cur ? cur.name : '—';
+  document.getElementById('ctxName').textContent = qualifiedName(cur);
   const sub = document.getElementById('ctxSub');
-  if(!isLive && live){ sub.textContent = 'Active profile is "'+live.name+'"'; sub.style.display = ''; }
+  if(!isLive && live){ sub.textContent = 'Active profile is "'+qualifiedName(live)+'"'; sub.style.display = ''; }
   else sub.style.display = 'none';
   document.getElementById('ctxSetActive').style.display = (isLive || !ble.connected) ? 'none' : '';
 }
+
+// Every group name currently in play: the ones profiles carry, plus any empty
+// ones created up front. Ungrouped is the absence of a group, so it isn't here.
+function allGroups(){
+  return [...new Set([...profiles.map(p=>p.group).filter(g=>g), ...extraGroups])]
+    .sort((a,b)=>a.localeCompare(b));
+}
+// Options shared by the new-profile form and the per-row move form.
+function groupOptionsHtml(selected){
+  return allGroups().map(g=>'<option value="'+escapeHtml(g)+'"'+(g===selected?' selected':'')+'>'+escapeHtml(g)+'</option>').join('')
+       + '<option value=""'+(selected===''?' selected':'')+'>'+UNGROUPED+'</option>'
+       + '<option value="__new__">+ New group…</option>';
+}
+function closeRowForms(){ rowMenu = null; rowMove = null; rowRename = null; }
 
 // ─── Render: profiles grouped by tag, expandable ──
 function renderProfileGroups(){
   const host = document.getElementById('profileGroups');
   const byGroup = {};
+  // Seed with the empty groups so they still render with nothing in them.
+  extraGroups.forEach(g=>{ byGroup[g] = []; });
   profiles.forEach(p=>{
     const g = groupLabel(p);
     (byGroup[g] = byGroup[g] || []).push(p);
@@ -847,23 +1219,58 @@ function renderProfileGroups(){
   });
   host.innerHTML = names.map(g=>{
     const open = expandedGroups.has(g);
-    const rows = byGroup[g].map(p=>
-      '<div class="prow'+(p.id===currentId?' cur':'')+(p.id===liveId?' live':'')+'" data-pid="'+p.id+'">'+
-        '<span class="pdot"></span>'+
-        '<span class="pname">'+escapeHtml(p.name)+'</span>'+
-        (p.id===liveId ? '<span class="pbadge">Active</span>' : '')+
-        '<button class="prowdel" data-pid="'+p.id+'" title="Delete profile" aria-label="Delete '+escapeHtml(p.name)+'">'+
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>'+
-        '</button>'+
-      '</div>'
-    ).join('');
+    const rows = byGroup[g].map(p=>{
+      let html =
+        '<div class="prow'+(p.id===currentId?' cur':'')+(p.id===liveId?' live':'')+'" data-pid="'+p.id+'">'+
+          '<span class="pdot"></span>'+
+          '<span class="pname">'+escapeHtml(p.name)+'</span>'+
+          (p.id===liveId ? '<span class="pbadge">Active</span>' : '')+
+          '<button class="prowmore'+(rowMenu===p.id||rowMove===p.id||rowRename===p.id?' on':'')+'" data-more="'+p.id+'" '+
+                  'title="Profile actions" aria-label="Actions for '+escapeHtml(p.name)+'">'+
+            '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>'+
+          '</button>'+
+        '</div>';
+      if(rowRename === p.id){
+        // Reuses .pmove's styling: same shape of inline form (a field plus a
+        // confirm/cancel pair) hanging off the row it acts on.
+        html +=
+          '<div class="pmove prename">'+
+            '<input type="text" class="rnval" placeholder="Profile name" maxlength="40" value="'+escapeHtml(p.name)+'"/>'+
+            '<div class="row" style="margin-top:0">'+
+              '<button class="dbtn" data-rncancel="1">Cancel</button>'+
+              '<button class="dbtn acc" data-rnok="'+p.id+'">Rename</button>'+
+            '</div>'+
+          '</div>';
+      } else if(rowMove === p.id){
+        html +=
+          '<div class="pmove">'+
+            '<select class="mvsel">'+groupOptionsHtml(p.group||'')+'</select>'+
+            '<input type="text" class="mvnew" placeholder="New group name" maxlength="30" style="display:none"/>'+
+            '<div class="row" style="margin-top:0">'+
+              '<button class="dbtn" data-mvcancel="1">Cancel</button>'+
+              '<button class="dbtn acc" data-mvok="'+p.id+'">Move</button>'+
+            '</div>'+
+          '</div>';
+      } else if(rowMenu === p.id){
+        html +=
+          '<div class="pacts">'+
+            '<button class="pact" data-rn="'+p.id+'">Rename…</button>'+
+            '<button class="pact" data-dup="'+p.id+'">Duplicate</button>'+
+            '<button class="pact" data-mv="'+p.id+'">Move…</button>'+
+            '<button class="pact del" data-del="'+p.id+'">Delete</button>'+
+          '</div>';
+      }
+      return html;
+    }).join('');
     return '<div class="pgroup'+(open?' open':'')+'" data-grp="'+escapeHtml(g)+'">'+
              '<div class="pghd">'+
                '<svg class="pgchev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>'+
                '<span class="pgname">'+escapeHtml(g)+'</span>'+
                '<span class="pgcount">'+byGroup[g].length+'</span>'+
+               (byGroup[g].length || g===UNGROUPED ? '' :
+                 '<button class="pgdel" data-gdel="'+escapeHtml(g)+'" title="Remove empty group" aria-label="Remove group '+escapeHtml(g)+'">×</button>')+
              '</div>'+
-             '<div class="pgrows">'+rows+'</div>'+
+             '<div class="pgrows">'+(rows || '<div class="pgempty">Empty — move a profile here</div>')+'</div>'+
            '</div>';
   }).join('');
 
@@ -872,10 +1279,20 @@ function renderProfileGroups(){
     if(expandedGroups.has(grp)) expandedGroups.delete(grp); else expandedGroups.add(grp);
     renderProfileGroups();
   }));
+  host.querySelectorAll('.pgdel').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    const g = el.getAttribute('data-gdel');
+    extraGroups = extraGroups.filter(x=>x!==g);
+    expandedGroups.delete(g);
+    persistProfiles();
+    renderProfileGroups();
+    toast('Removed group "'+g+'"');
+  }));
   host.querySelectorAll('.prow').forEach(el=> el.addEventListener('click', ()=>{
     const id = el.getAttribute('data-pid');
+    closeRowForms();
     closeDrawer();
-    if(id === currentId) return;
+    if(id === currentId){ renderProfileGroups(); return; }
     currentId = id;
     loadCurrentIntoEditor();
     persistProfiles();
@@ -883,12 +1300,154 @@ function renderProfileGroups(){
     renderContextBar();
     closeSheet();
     render();
-    toast('Editing "'+currentProfile().name+'"');
+    toast('Editing "'+qualifiedName(currentProfile())+'"');
   }));
-  host.querySelectorAll('.prowdel').forEach(el=> el.addEventListener('click', e=>{
+  host.querySelectorAll('[data-more]').forEach(el=> el.addEventListener('click', e=>{
     e.stopPropagation();
-    deleteProfile(el.getAttribute('data-pid'));
+    const id = el.getAttribute('data-more');
+    const wasOpen = rowMenu === id || rowMove === id || rowRename === id;
+    closeRowForms();
+    if(!wasOpen) rowMenu = id;
+    renderProfileGroups();
   }));
+  host.querySelectorAll('[data-dup]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    duplicateProfile(el.getAttribute('data-dup'));
+  }));
+  host.querySelectorAll('[data-del]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    deleteProfile(el.getAttribute('data-del'));
+  }));
+  host.querySelectorAll('[data-mv]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    rowMenu = null;
+    rowMove = el.getAttribute('data-mv');
+    renderProfileGroups();
+  }));
+  host.querySelectorAll('[data-rn]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    rowMenu = null;
+    rowRename = el.getAttribute('data-rn');
+    renderProfileGroups();
+    const box = host.querySelector('.prename .rnval');
+    if(box){ box.focus(); box.select(); }
+  }));
+  host.querySelectorAll('[data-rncancel]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    closeRowForms();
+    renderProfileGroups();
+  }));
+  host.querySelectorAll('.prename .rnval').forEach(el=>{
+    // Without this the row's own click handler fires and switches the editor to
+    // this profile the moment you put the caret in the field.
+    el.addEventListener('click', e=>e.stopPropagation());
+    el.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); el.closest('.prename').querySelector('[data-rnok]').click(); }
+      if(e.key==='Escape'){ closeRowForms(); renderProfileGroups(); }
+    });
+  });
+  host.querySelectorAll('[data-rnok]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    const name = el.closest('.prename').querySelector('.rnval').value.trim();
+    renameProfile(el.getAttribute('data-rnok'), name);
+  }));
+  host.querySelectorAll('[data-mvcancel]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    closeRowForms();
+    renderProfileGroups();
+  }));
+  host.querySelectorAll('.pmove').forEach(box=>{
+    const selEl = box.querySelector('.mvsel');
+    const newEl = box.querySelector('.mvnew');
+    selEl.addEventListener('click', e=>e.stopPropagation());
+    selEl.addEventListener('change', ()=>{
+      newEl.style.display = selEl.value === '__new__' ? '' : 'none';
+      if(selEl.value === '__new__') newEl.focus();
+    });
+    newEl.addEventListener('click', e=>e.stopPropagation());
+    newEl.addEventListener('keydown', e=>{
+      if(e.key==='Enter') box.querySelector('[data-mvok]').click();
+    });
+  });
+  host.querySelectorAll('[data-mvok]').forEach(el=> el.addEventListener('click', e=>{
+    e.stopPropagation();
+    const box = el.closest('.pmove');
+    let group = box.querySelector('.mvsel').value;
+    if(group === '__new__'){
+      group = box.querySelector('.mvnew').value.trim();
+      if(!group){ toast('Enter a group name'); box.querySelector('.mvnew').focus(); return; }
+    }
+    moveProfile(el.getAttribute('data-mvok'), group);
+  }));
+}
+
+// ─── Move a profile into another group ──
+// The group lives on the profile itself, so this is a one-field edit plus a
+// targeted `put` — the device stores it alongside the bindings.
+function moveProfile(id, group){
+  if(!ble.connected){ toast('Connect your device to manage profiles'); return; }
+  const p = profiles.find(x=>x.id===id);
+  if(!p) return;
+  p.group = group;
+  if(group && !extraGroups.includes(group)) extraGroups.push(group);
+  closeRowForms();
+  expandedGroups.add(groupLabel(p));
+  persistProfiles();
+  renderProfileGroups();
+  renderContextBar();
+  toast('Moved "'+p.name+'" to '+(group || UNGROUPED));
+  putProfile(p);
+}
+
+// ─── Rename a profile ──
+// The name lives on the profile, so like a move this is a one-field edit plus a
+// targeted `put`. Contrast with the controller rename, which is a device-level
+// `name` command — see showRenameForm().
+function renameProfile(id, name){
+  if(!ble.connected){ toast('Connect your device to manage profiles'); return; }
+  const p = profiles.find(x=>x.id===id);
+  if(!p) return;
+  if(!name){ toast('Enter a profile name'); return; }
+  // Matches the cap duplicateProfile() applies, and keeps the profile inside the
+  // firmware's MAX_PROFILE reassembly ceiling.
+  name = name.slice(0,40);
+  if(name === p.name){ closeRowForms(); renderProfileGroups(); return; }
+  const was = p.name;
+  p.name = name;
+  closeRowForms();
+  persistProfiles();
+  renderProfileGroups();
+  renderContextBar();
+  // The editor header shows the current profile's name, so it has to repaint
+  // when the rename lands on whichever profile is loaded.
+  if(p.id === currentId) render();
+  toast('Renamed "'+was+'" to "'+name+'"');
+  putProfile(p);
+}
+
+// ─── Duplicate a profile ──
+// Deep-copied so the copy and the original don't share binding objects, and
+// given a fresh id because that id doubles as the on-device filename.
+function duplicateProfile(id){
+  if(!ble.connected){ toast('Connect your device to manage profiles'); return; }
+  const src = profiles.find(x=>x.id===id);
+  if(!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = makeProfileId();
+  copy.name = (src.name + ' copy').slice(0,40);
+  profiles.splice(profiles.indexOf(src)+1, 0, copy);
+  closeRowForms();
+  currentId = copy.id;
+  loadCurrentIntoEditor();
+  expandedGroups.add(groupLabel(copy));
+  persistProfiles();
+  closeDrawer();
+  renderProfileGroups();
+  renderContextBar();
+  closeSheet();
+  render();
+  toast('Duplicated as "'+copy.name+'"');
+  putProfile(copy);
 }
 
 // ─── Delete a profile ──
@@ -904,6 +1463,7 @@ function deleteProfile(id){
 
   const wasLive = liveId === id;
   const wasCurrent = currentId === id;
+  closeRowForms();
   profiles = profiles.filter(x=>x.id!==id);
   if(wasLive) liveId = profiles[0].id;
   if(wasCurrent){ currentId = liveId; loadCurrentIntoEditor(); }
@@ -978,8 +1538,19 @@ function renderSheetBody(){
     return '<button class="typeb'+(on?' active':'')+'" data-type="'+t.id+'" style="'+(on?'background:'+t.color+';border-color:'+t.color:'')+'">'+t.label+'</button>';
   }).join("");
 
+  // Only grid keys (K1..K12) have a physical LED — the hat, thumb buttons and
+  // joystick have none, so they skip this section entirely.
+  const hasLed = inp.grp === 'key';
+  const ledSection = !hasLed ? '' :
+    '<label class="fl">LED Color</label>'+
+    '<div class="ledrow">'+
+      '<input type="color" id="ledColor" value="'+(led[sel]||'#202020')+'"/>'+
+      '<button class="dbtn" id="ledClear"'+(led[sel]?'':' disabled')+'>No light</button>'+
+    '</div>';
+
   host.innerHTML =
     '<div class="side-t">'+inp.label+'</div><div class="side-s">'+sel+' · '+inp.grp+'</div>'+
+    ledSection+
     '<label class="fl">Category</label>'+
     '<div class="types">'+tabs+'</div>'+
     '<div id="typeContent"></div>'+
@@ -992,6 +1563,24 @@ function renderSheetBody(){
     delete bind[sel]; renderSheetBody(); refreshCells();
     scheduleProfileSync();
   });
+
+  if(hasLed){
+    const colorInput = document.getElementById("ledColor");
+    const clearBtn = document.getElementById("ledClear");
+    colorInput.addEventListener("input", ()=>{
+      led[sel] = colorInput.value;
+      clearBtn.disabled = false;
+      refreshCells();
+      scheduleProfileSync();
+    });
+    clearBtn.addEventListener("click", ()=>{
+      delete led[sel];
+      colorInput.value = "#202020";
+      clearBtn.disabled = true;
+      refreshCells();
+      scheduleProfileSync();
+    });
+  }
 
   renderTypeContent(b);
 }
@@ -1142,7 +1731,9 @@ function renderTypeContent(b){
         '<button class="modb'+(curMods.includes(m)?' on':'')+'" data-kmod="'+m+'">'+
         m+'</button>').join("")+'</div>'+
       '<label class="fl">Key</label><select id="keySel">'+opts+'</select>'+
-      '<div class="hint">Modifiers are held with the key for as long as the button is down.</div>';
+      '<div class="hint">Modifiers are held with the key for as long as the button is down. '+
+      'Pick modifiers and leave the key empty to make this button act as a plain '+
+      'Ctrl, Shift, Alt or Win key.</div>';
 
     // Write the chord back, dropping the binding only when nothing is selected.
     const apply = (mods, key)=>{
@@ -1198,7 +1789,11 @@ function toast(msg){
 }
 
 // ─── Header / connection helpers ───
+// Last name the device reported, so the rename field can prefill with it.
+let devName = '';
 function setConn(on, name){
+  devName = on ? (name || devName) : '';
+  if(!on) showRenameForm(false);
   const pill = document.getElementById('connPill');
   pill.classList.toggle('on', on);
   document.getElementById('connLabel').textContent = on ? (name || 'Connected') : 'Disconnected';
@@ -1218,6 +1813,8 @@ function openDrawer(){
 function closeDrawer(){
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('backdrop').classList.remove('show');
+  // Don't leave a row's action strip hanging open for the next time it opens.
+  if(rowMenu || rowMove || rowRename){ closeRowForms(); renderProfileGroups(); }
 }
 
 // ─── Events ───
@@ -1231,14 +1828,90 @@ document.getElementById('connectBox').addEventListener('click', async ()=>{
     toast('Web Bluetooth needs Chrome/Edge over HTTPS or localhost');
     return;
   }
-  if(ble.connected){ await ble.disconnect(); setConn(false,''); toast('Disconnected'); return; }
+  if(ble.connected){
+    await ble.disconnect();
+    // Deliberate disconnects clear the remembered device; a link that merely
+    // dropped does not, so a reload after a dropout still reconnects itself.
+    try{ localStorage.removeItem(LASTDEV_KEY); }catch{}
+    setConn(false,''); toast('Disconnected'); return;
+  }
   try{
     const n = await ble.connect();
     setConn(true, n);
     toast('Connected to '+n);
     await syncFromDevice();
+    maybeImportFromLink();
   }
   catch(e){ if(e.name!=='NotFoundError') toast(e.message); }
+});
+
+// ─── Auto-reconnect ───
+// getDevices() lists devices the user has already granted this origin access to,
+// so reconnecting to one needs no chooser and no user gesture. It is gated
+// behind chrome://flags/#enable-web-bluetooth-new-permissions-backend; where the
+// flag is off the method simply isn't there, and the user connects by hand as
+// before. Every failure here is silent — this runs unprompted at load, and a
+// controller that is switched off is the normal case, not an error worth a toast.
+async function tryAutoReconnect(){
+  if(!navigator.bluetooth || !window.isSecureContext) return;
+  if(!navigator.bluetooth.getDevices) return;
+  let wantId = null;
+  try{ wantId = localStorage.getItem(LASTDEV_KEY); }catch{}
+  if(!wantId) return;
+
+  let dev = null;
+  try{ dev = (await navigator.bluetooth.getDevices()).find(d=> d.id === wantId); }
+  catch{ return; }
+  // Permission revoked, or a different browser profile — fall back to the button.
+  if(!dev) return;
+
+  try{
+    const n = await ble.attach(dev);
+    setConn(true, n);
+    toast('Reconnected to '+n);
+    await syncFromDevice();
+    maybeImportFromLink();
+  }catch{
+    // Out of range or powered down. _openGatt has already retried; leaving the
+    // stored id in place means the next load tries again.
+    setConn(false,'');
+  }
+}
+
+// ─── Rename the controller ───
+// The name lives on the device, not in localStorage: it's what the OS
+// Bluetooth list shows, so it has to survive being opened from another browser.
+function showRenameForm(show){
+  document.getElementById('renameForm').style.display = show ? '' : 'none';
+  document.getElementById('renameBtn').style.display  = show ? 'none' : '';
+  if(show){
+    const i = document.getElementById('renameInput');
+    i.value = devName;
+    i.focus(); i.select();
+  }
+}
+document.getElementById('renameBtn').addEventListener('click', ()=>{
+  if(!ble.connected){ toast('Connect your device to rename it'); return; }
+  showRenameForm(true);
+});
+document.getElementById('renameCancel').addEventListener('click', ()=> showRenameForm(false));
+document.getElementById('renameSave').addEventListener('click', async ()=>{
+  const name = document.getElementById('renameInput').value.trim();
+  if(!name){ toast('Enter a name'); return; }
+  if(!ble.connected){ toast('Connect your device to rename it'); return; }
+  try{
+    await ble.cmd({ cmd:'name', name });
+    showRenameForm(false);
+    setConn(true, name);
+    // The OS caches the name it saw when it last scanned, so the system
+    // Bluetooth list keeps showing the old one until it scans again. Say so
+    // rather than letting it look like the rename didn't take.
+    toast('Renamed to "'+name+'" — re-scan Bluetooth to see it');
+  }catch(e){ toast('rename failed: '+e.message); }
+});
+document.getElementById('renameInput').addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('renameSave').click(); }
+  if(e.key === 'Escape') showRenameForm(false);
 });
 
 // ─── Set active profile ───
@@ -1247,7 +1920,7 @@ document.getElementById('ctxSetActive').addEventListener('click', ()=>{
   persistProfiles();
   renderProfileGroups();
   renderContextBar();
-  toast('"'+currentProfile().name+'" is now the active profile');
+  toast('"'+qualifiedName(currentProfile())+'" is now the active profile');
   if(ble.connected){
     ble.cmd({ cmd:'live', id:liveId }).catch(e=>toast('device sync error: '+e.message));
   }
@@ -1258,17 +1931,10 @@ const npForm = document.getElementById('newProfileForm');
 const npName = document.getElementById('npName');
 const npGroup = document.getElementById('npGroup');
 const npNewGroup = document.getElementById('npNewGroup');
-function existingGroups(){
-  return [...new Set(profiles.map(p=>p.group).filter(g=>g))].sort((a,b)=>a.localeCompare(b));
-}
 function openNewProfileForm(){
   if(!ble.connected){ toast('Connect your device to create profiles'); return; }
-  const groups = existingGroups();
-  npGroup.innerHTML = groups.map(g=>'<option value="'+escapeHtml(g)+'">'+escapeHtml(g)+'</option>').join('')
-                    + '<option value="">'+UNGROUPED+'</option>'
-                    + '<option value="__new__">+ New group…</option>';
-  const curGroup = currentProfile().group || '';
-  if([...npGroup.options].some(o=>o.value===curGroup)) npGroup.value = curGroup;
+  closeNewGroupForm();
+  npGroup.innerHTML = groupOptionsHtml(currentProfile().group || '');
   npNewGroup.style.display = npGroup.value === '__new__' ? '' : 'none';
   npName.value = '';
   npNewGroup.value = '';
@@ -1296,7 +1962,8 @@ document.getElementById('npCreate').addEventListener('click', ()=>{
     group = npNewGroup.value.trim();
     if(!group){ toast('Enter a group name'); npNewGroup.focus(); return; }
   }
-  const p = { id: makeProfileId(), name, group, bindings:{}, joystick:{mode:'analog'} };
+  if(group && !extraGroups.includes(group)) extraGroups.push(group);
+  const p = { id: makeProfileId(), name, group, bindings:{}, joystick:{mode:'analog'}, leds:{} };
   profiles.push(p);
   currentId = p.id;
   loadCurrentIntoEditor();
@@ -1310,6 +1977,90 @@ document.getElementById('npCreate').addEventListener('click', ()=>{
   render();
   toast('Created "'+p.name+'"');
   scheduleProfileSync();
+});
+
+// ─── New group form ───
+// Creating a group is purely local: it holds no profiles yet, so there's
+// nothing to send to the device until one is created in or moved into it.
+const ngForm = document.getElementById('newGroupForm');
+const ngName = document.getElementById('ngName');
+function openNewGroupForm(){
+  if(!ble.connected){ toast('Connect your device to manage profiles'); return; }
+  closeNewProfileForm();
+  ngName.value = '';
+  ngForm.style.display = 'flex';
+  document.getElementById('newGroupBtn').style.display = 'none';
+  ngName.focus();
+}
+function closeNewGroupForm(){
+  ngForm.style.display = 'none';
+  document.getElementById('newGroupBtn').style.display = '';
+}
+document.getElementById('newGroupBtn').addEventListener('click', openNewGroupForm);
+document.getElementById('ngCancel').addEventListener('click', closeNewGroupForm);
+ngName.addEventListener('keydown', e=>{
+  if(e.key==='Enter') document.getElementById('ngCreate').click();
+  if(e.key==='Escape') closeNewGroupForm();
+});
+document.getElementById('ngCreate').addEventListener('click', ()=>{
+  const name = ngName.value.trim();
+  if(!name){ toast('Enter a group name'); ngName.focus(); return; }
+  if(name.toLowerCase() === UNGROUPED.toLowerCase()){
+    toast('"'+UNGROUPED+'" is where profiles with no group live');
+    ngName.focus();
+    return;
+  }
+  const existing = allGroups().find(g=>g.toLowerCase()===name.toLowerCase());
+  if(existing){
+    expandedGroups.add(existing);
+    closeNewGroupForm();
+    renderProfileGroups();
+    toast('"'+existing+'" already exists');
+    return;
+  }
+  extraGroups.push(name);
+  expandedGroups.add(name);
+  persistProfiles();
+  closeNewGroupForm();
+  renderProfileGroups();
+  toast('Created group "'+name+'"');
+});
+
+// ─── Import a profile from a share link ───
+// Gated on ble.connected for the same reason as "+ New profile": connecting
+// replaces `profiles` wholesale with whatever the device has (syncFromDevice),
+// so a profile created before that first connect would just get discarded.
+function maybeImportFromLink(){
+  if(!pendingImportPayload) return;
+  const payload = pendingImportPayload;
+  if(!ble.connected){ toast('Connect your device to import "'+(payload.name||'Untitled')+'"'); return; }
+  pendingImportPayload = null;
+  if(!confirm('Import shared profile "'+(payload.name||'Untitled')+'" as a new profile?')) return;
+  const p = {
+    id: makeProfileId(),
+    name: String(payload.name||'Shared profile').slice(0,40),
+    group: payload.group||'',
+    bindings: normalizeBindings(migrateInputIds(payload.bindings||{})),
+    joystick: payload.joystick||{mode:'analog'},
+    leds: normalizeLeds(migrateInputIds(payload.leds||{})),
+  };
+  profiles.push(p);
+  currentId = p.id;
+  loadCurrentIntoEditor();
+  expandedGroups.add(groupLabel(p));
+  persistProfiles();
+  renderProfileGroups();
+  renderContextBar();
+  closeSheet();
+  render();
+  toast('Imported "'+p.name+'"');
+  scheduleProfileSync();
+}
+document.getElementById('shareLinkBtn').addEventListener('click', async ()=>{
+  try{
+    await navigator.clipboard.writeText(await buildShareLink());
+    toast('Share link copied');
+  }catch(e){ toast('Could not copy link: '+e.message); }
 });
 
 document.getElementById('exportBtn').addEventListener('click', ()=>{
@@ -1329,6 +2080,7 @@ document.getElementById('fileInput').addEventListener('change', e=>{
       const d = JSON.parse(ev.target.result);
       bind = normalizeBindings(d.bindings || {});
       joy  = d.joystick || { mode:'analog' };
+      led  = normalizeLeds(d.leds || {});
       sel = null;
       closeSheet();
       render();
@@ -1346,6 +2098,16 @@ renderProfileGroups();
 renderContextBar();
 setConn(false,'');
 render();
+consumeShareHash().then(payload=>{
+  if(!payload) return;
+  pendingImportPayload = payload;
+  maybeImportFromLink();
+})
+// Chained rather than called alongside: the reconnect must not start until the
+// share-link payload has been staged, or a link opened in a fresh tab would be
+// dropped by the sync that the reconnect kicks off. `finally` so a malformed
+// link still leaves the controller reconnecting.
+.finally(tryAutoReconnect);
 </script>
 </body>
 </html>

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(python3 -m http.server 8123)",
+      "Bash(curl -sf http://localhost:8123/index.html)",
+      "Bash(find / -iname \"*chromium-cli*\" -maxdepth 6)",
+      "Read(//tmp/claude-1000/bundled-skills/**)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(python3 -c \"import playwright\")",
+      "Bash(pip show *)",
+      "Bash(npm ls *)",
+      "Read(//home/ddennis/.cache/**)",
+      "Bash(node -e ' *)",
+      "Read(//tmp/**)",
+      "Bash(timeout 60 npm install playwright-chromium --no-save --prefix /tmp/pwtest)",
+      "Bash(node /tmp/pwtest/test.js)"
+    ]
+  }
+}

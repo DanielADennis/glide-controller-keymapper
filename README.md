@@ -15,13 +15,29 @@ characteristic is a separate, one-way live feed of physical input state — see
 [Live Input Mirror](#live-input-mirror).
 
 The web app writes a JSON command in **one** `writeValueWithResponse` call, then
-immediately reads the response. Commands larger than the negotiated MTU (a `put`
-with a full profile is ~1 KB) are carried by the ATT layer as a queued/long
-write; the firmware's GATT stack reassembles the fragments and delivers the
-complete command to a single write callback. The web app must **not** pre-split
-a command into multiple writes — each write is an independent ATT transaction,
-so the firmware would receive JSON fragments, not one command. The firmware must
-have a response ready before the read.
+immediately reads the response. The firmware must have a response ready before
+the read.
+
+### The 512-byte ceiling
+
+**Every command and every response must fit in 512 bytes.** This is
+`BLE_ATT_ATTR_MAX_LEN` — the maximum length of an ATT attribute value in the
+Bluetooth spec. It is not a tunable, and it is **not** lifted by negotiating a
+larger MTU or by using long reads / queued writes:
+
+- A read of a longer value stops at 512 bytes. The client gets a truncated
+  object and can only fail to parse it — there is no error, just corruption.
+- A queued (long) write whose reassembled value exceeds 512 is rejected by the
+  stack with `BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN`.
+
+A full profile is 1.5–2 KB, several times over. So `get` and `put` move a
+profile as a series of windows — see [Chunked profile transfer](#chunked-profile-transfer).
+`ls`, `del`, `live`, and `name` are small enough to fit in one operation.
+
+Within a single command the web app must **not** pre-split the JSON into
+multiple writes: each write is an independent ATT transaction, so the firmware
+would receive JSON fragments rather than one command. Chunking happens at the
+protocol level, above ATT — each chunk is its own complete, well-formed command.
 
 ---
 
@@ -40,54 +56,112 @@ All commands and responses are UTF-8 JSON.
 ```json
 {
   "ids": ["m9k2r4", "n1p8z9"],
-  "liveId": "m9k2r4"
+  "liveId": "m9k2r4",
+  "name": "Glide Controller"
 }
 ```
+
+`name` is the advertised BLE device name. It is read from the GAP service rather
+than from `/config.json`, so it reflects what is actually being advertised —
+including the built-in default when nothing has been stored.
+
+---
+
+### Chunked profile transfer
+
+Both `get` and `put` carry a **window** of the profile's raw JSON text — the
+exact bytes stored at `/profiles/<id>.json` — rather than a profile object.
+
+The window is **base64**-encoded. It is not embedded directly as a JSON string
+because the payload is itself JSON: escaping would expand it by an amount that
+depends on the profile's content, so the frame size would cross 512 for some
+profiles and not others. Base64 expands by a fixed 4/3, keeping every frame the
+same predictable size whatever the profile contains.
+
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `CHUNK_RAW` | 288 | raw bytes per window (→ 384 base64 chars) |
+| `MAX_PROFILE` | 4096 | largest profile the firmware will reassemble |
+
+Both sides must agree on `CHUNK_RAW`: `ble_config.c` and `index.html` each
+define it.
+
+Offsets are **byte** offsets into the UTF-8 text, so a window boundary can fall
+inside a multi-byte character. Decode to text only after the whole profile is
+reassembled — never per chunk.
 
 ---
 
 ### `get` — Read one profile
 
-**Request**
+Fetches one window. The client repeats with `off` advanced by the number of
+bytes decoded until it has `total` bytes.
+
+**Request** — `off` may be omitted, and defaults to 0
 ```json
-{ "cmd": "get", "id": "m9k2r4" }
+{ "cmd": "get", "id": "m9k2r4", "off": 0 }
 ```
 
-**Response** — full profile object (see Profile Schema below)
+**Response**
 ```json
-{
-  "version": 4,
-  "id": "m9k2r4",
-  "name": "Racing Game",
-  "group": "Gaming",
-  "bindings": { ... },
-  "joystick": { "mode": "analog" }
-}
+{ "off": 0, "total": 1996, "data": "<base64 of up to 288 bytes>" }
 ```
+
+`total` is the profile's full size in bytes. The final window is short. A
+response with an empty `data` before `total` bytes have arrived is an error —
+the client must fail rather than loop.
+
+Errors: `invalid id`, `not found`, `bad offset`, `read failed`, `encode failed`.
 
 ---
 
 ### `put` — Write / create / update a profile
 
+Sends one window. The firmware buffers in RAM and **only touches flash once the
+final window arrives**, so a transfer abandoned partway leaves the stored
+profile exactly as it was rather than overwriting it with a prefix.
+
 **Request**
 ```json
 {
   "cmd": "put",
-  "profile": {
-    "version": 4,
-    "id": "m9k2r4",
-    "name": "Racing Game",
-    "group": "Gaming",
-    "bindings": { ... },
-    "joystick": { "mode": "analog" }
-  }
+  "id": "m9k2r4",
+  "off": 0,
+  "total": 1996,
+  "data": "<base64 of up to 288 bytes>"
 }
 ```
 
-**Response**
+**Response** — intermediate window
 ```json
-{ "ok": true }
+{ "ok": true, "got": 288 }
 ```
+
+**Response** — final window, after the profile is validated and stored
+```json
+{ "ok": true, "done": true }
+```
+
+**Sequencing.** `off: 0` begins a new transfer and discards any partial one.
+Every later window must continue the transfer in progress: same `id`, same
+`total`, and `off` exactly equal to the bytes received so far. Anything else is
+rejected with `out of sequence` and the partial transfer is dropped — this is
+what stops a retried or reordered window from stitching two different profiles
+into one corrupt file.
+
+Only one transfer may be in flight. The firmware serves a single client and
+tracks a single transfer, so **the client must not interleave other commands
+between a transfer's chunks** — the whole chunk loop belongs inside one
+serialized block. A partial transfer is also dropped on disconnect.
+
+On the final window the firmware parses the reassembled text and checks that its
+`id` matches the one the chunks were sent under, before writing. A profile that
+fails either check is rejected rather than stored, since a stored profile that
+doesn't parse would read back as `not found` forever.
+
+Errors: `invalid id`, `missing data`, `missing off/total`, `bad offset`,
+`bad data`, `chunk past total`, `out of sequence`, `out of memory`,
+`profile parse error`, `id mismatch`, `write failed`.
 
 ---
 
@@ -119,6 +193,35 @@ All commands and responses are UTF-8 JSON.
 
 ---
 
+### `name` — Rename the controller
+
+Sets the advertised BLE device name — what the OS Bluetooth list shows. Stored
+in `/config.json` and reapplied on every boot.
+
+**Request**
+```json
+{ "cmd": "name", "name": "Left Hand" }
+```
+
+**Response**
+```json
+{ "ok": true }
+```
+
+Surrounding spaces are trimmed. The name must be 1–26 characters once trimmed,
+and may not contain control characters; anything else is rejected with
+`{"error":"name must be 1-26 printable characters"}` rather than truncated.
+
+The 26-character ceiling is the advertising payload budget: the primary AD is 31
+bytes, of which 3 go to flags and 2 to the name's own header.
+
+The GAP name characteristic updates immediately, so a connected client sees the
+new name without reconnecting. The advertisement carries it from the next time
+advertising starts. Hosts cache the name from their last scan, so the system
+Bluetooth list may keep showing the old one until it re-scans.
+
+---
+
 ## Live Input Mirror
 
 > Unrelated to the `live` command above, which sets the active profile. This is
@@ -133,18 +236,19 @@ loop, and a 4-byte packed frame keeps it off the allocator.
 
 ```js
 const bits = dataView.getUint32(0, /* littleEndian */ true);
-const k1Held = !!(bits & (1 << 0));
+const p1Held = !!(bits & (1 << 0));
 ```
 
-**Bit order** — matches `INPUT_IDS[]` in the firmware's `src/config.c` and
-`LIVE_INPUT_ORDER` in the web app. The wire carries positions, not names, so
+**Bit order** — matches `INPUT_IDS[]` / `input_id_t` in the firmware's
+`src/config.c` and `include/config.h`, and `LIVE_INPUT_ORDER` in the web app. The wire carries positions, not names, so
 reordering one side without the other silently mismaps inputs instead of failing:
 
 | Bit | Input | Bit | Input | Bit | Input |
 |-----|-------|-----|-------|-----|-------|
-| 0–11 | `K1`…`K12` | 12 | `HAT_U` | 13 | `HAT_D` |
-| 14 | `HAT_L` | 15 | `HAT_R` | 16 | `HAT_C` |
-| 17 | `S1` | 18 | `S2` | 19 | `JD_U` |
+| 0–2 | `P1`…`P3` | 3–5 | `R1`…`R3` | 6–8 | `M1`…`M3` |
+| 9–11 | `I1`…`I3` | 12 | `T1` | 13 | `T2` |
+| 14 | `HAT_U` | 15 | `HAT_D` | 16 | `HAT_L` |
+| 17 | `HAT_R` | 18 | `HAT_C` | 19 | `JD_U` |
 | 20 | `JD_D` | 21 | `JD_L` | 22 | `JD_R` |
 
 Bits 23–31 are reserved and currently always zero.
@@ -183,15 +287,20 @@ the connection usable for editing.
     m9k2r4.json       ← one file per profile, named by profile id
     n1p8z9.json
     ...
-/config.json          ← tracks which profile is currently active
+/config.json          ← active profile + device name
 ```
 
 ### `/config.json`
 ```json
 {
-  "liveId": "m9k2r4"
+  "liveId": "m9k2r4",
+  "name": "Glide Controller"
 }
 ```
+
+`name` is absent until the controller is renamed; the firmware falls back to
+`"Glide Controller"`. Both keys live in this one file, so `live` and `name` each
+read-modify-write it rather than rewriting it from scratch.
 
 ### `/profiles/<id>.json`
 Full profile object — see Profile Schema below.
@@ -202,15 +311,15 @@ Full profile object — see Profile Schema below.
 
 ```json
 {
-  "version": 4,
+  "version": 5,
   "id": "m9k2r4",
   "name": "Racing Game",
   "group": "Gaming",
   "bindings": {
-    "K1": { "type": "key", "key": "A" },
-    "K2": { "type": "key", "key": "C", "mods": ["CTRL"] },
+    "P1": { "type": "key", "key": "A" },
+    "P2": { "type": "key", "key": "C", "mods": ["CTRL"] },
     "HAT_U": { "type": "mouse", "action": "scroll_up" },
-    "S1": { "type": "macro", "steps": [
+    "T1": { "type": "macro", "steps": [
       { "type": "key", "keys": ["C"], "mods": ["CTRL"] },
       { "type": "delay", "ms": 250 },
       { "type": "gamepad", "button": "A" }
@@ -218,31 +327,59 @@ Full profile object — see Profile Schema below.
   },
   "joystick": {
     "mode": "analog"
+  },
+  "leds": {
+    "P1": "#ff2d2d",
+    "P2": "#2d6bff"
   }
 }
 ```
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `version` | integer | `4`. Version `3` also loads — the two differ only in macro step form (see Macro below) |
+| `version` | integer | `5`. Versions `3` and `4` also load: they differ in macro step form (see Macro below) and use the pre-rename `K1`..`K12`/`S1`/`S2` input names, which are still accepted and mapped to the same physical keys |
 | `id` | string | Immutable, `[0-9a-z]` only, used as filename |
 | `name` | string | Human-readable, freely editable |
 | `group` | string | Group label (e.g. `"Gaming"`). Empty string = ungrouped |
 | `bindings` | object | Map of input ID → binding. Omitted inputs have no assignment |
 | `joystick` | object | `{ "mode": "analog" \| "digital" \| "mouse" }` |
+| `leds` | object | Optional. Map of grid/thumb key → `"#rrggbb"`. Omitted keys stay unlit. See LED Strip below |
+
+---
+
+## LED Strip
+
+The device has one addressable RGB LED per key — the twelve grid keys and both
+thumb keys. The hat switch and joystick have no LEDs. Each key shows the color
+assigned in `leds` as a dim idle glow, jumping to full brightness while that
+key is held. A key with no entry in `leds` (or an all-zero color) stays off.
+
+`leds` is a plain map, independent of `bindings` — a key can have a light with
+no binding, a binding with no light, both, or neither. Colors are `"#rrggbb"`
+hex strings (lowercase or uppercase, `#` required); anything else for a given
+key is rejected and that key is left unlit rather than failing the whole
+profile. Missing from a profile entirely is the same as an empty `leds`
+object — every key stays off.
+
+Firmware written before this field existed simply has no `leds` handling, so a
+profile carrying it still loads there — it just has no visible effect until
+that firmware is updated.
 
 ---
 
 ## Input IDs
 
+Inputs are named by finger and position: **P**inky, **R**ing, **M**iddle,
+**I**ndex, **T**humb, numbered 1..3 outward from the palm.
+
 ### Grid keys
-`K1` `K2` `K3` `K4` `K5` `K6` `K7` `K8` `K9` `K10` `K11` `K12`
+`P1` `P2` `P3` `R1` `R2` `R3` `M1` `M2` `M3` `I1` `I2` `I3`
 
 ### Hat switch
 `HAT_U` `HAT_D` `HAT_L` `HAT_R` `HAT_C`
 
 ### Thumb buttons
-`S1` `S2`
+`T1` `T2`
 
 ### Digital joystick directions
 `JD_U` `JD_D` `JD_L` `JD_R`
@@ -260,7 +397,11 @@ Full profile object — see Profile Schema below.
 { "type": "key", "keys": ["A", "B"], "mods": ["CTRL", "SHIFT"] }
 { "type": "key", "mods": ["SHIFT"] }
 ```
-Valid keys: `A`–`Z`, `0`–`9`, `F1`–`F12`, `ENTER`, `SPACE`, `ESCAPE`, `TAB`, `BACKSPACE`, `DELETE`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `HOME`, `END`, `PGUP`, `PGDN`
+Valid keys: `A`–`Z`, `0`–`9`, `F1`–`F12`, `ENTER`, `SPACE`, `ESCAPE`, `TAB`, `BACKSPACE`, `DELETE`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `HOME`, `END`, `PGUP`, `PGDN`, `CAPS_LOCK`, `INSERT`, `PRTSC`, `SCROLL_LOCK`, `NUM_LOCK`, `PAUSE`, `MENU`
+
+The lock/system keys are ordinary keycodes, not modifiers — `CAPS_LOCK` toggles
+on press exactly as it does on a keyboard, rather than staying on while held.
+`MENU` is the context-menu ("application") key.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -384,7 +525,7 @@ macro still plays; a macro with no usable steps leaves the input unbound.
 | Event | Web app sends |
 |-------|--------------|
 | Device connects | `ls` → sequential `get` for each id; subscribes to the input characteristic |
-| Binding/joystick edited | `put` for the one changed profile (debounced 500 ms) |
+| Binding/joystick/LED edited | `put` for the one changed profile (debounced 500 ms) |
 | New profile created | `put` for the new profile |
 | Profile imported from file | `put` for the updated profile |
 | Profile deleted | `del` for the removed id; `live` if it was the active profile |
